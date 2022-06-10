@@ -20,26 +20,29 @@ biasValues               = CSV.read(filepath2 , DataFrame; header=false)
 
 #creating data for plots
 
-y    = abs.(staticCapacitance.Column1).^-2
-bias = biasValues.Column1.+biasValues.Column1[2]/2
+y    = abs.(staticCapacitance.Column1*10^9).^-2
+bias = biasValues.Column1#.+biasValues.Column1[2]/2
 bias = bias[1:100]
 bias = abs.(bias)
 
-data = DataFrame(X=bias,Y=y)
+data = DataFrame(X=bias[1:95],Y=y[1:95])
 ols = lm(@formula(Y ~ X), data)
 coef(ols)
 
 function display() #function to display plots
 
-    plot1=plot(bias,y, reuse=false, xlabel = "Voltage", ylabel="Capacitance")
+    plot1=plot(biasValues.Column1[1:95],abs.(staticCapacitance.Column1[1:95])*10^9, reuse=false, xlabel = "U[V]", ylabel="C[nF]", seriestype = :scatter)
+    plot2=plot(bias[1:95],y[1:95], reuse=false, xlabel = "U[V]", ylabel="1/C[nF]^2", seriestype = :scatter)
+    
 
     model(x) = coef(ols)[1] + coef(ols)[2] * x
-    #1.4775483873006742e7
-    build_in_potential = coef(ols)[1]/coef(ols)[2]
-    scatter(data.X, data.Y)
-    plot2= plot(data.X, model.(data.X), legend=false, reuse = false, xlabel = "Stranger", ylabel="Things")
+    #plot!(data.X, model.(data.X), lw=3)
+    #scatter(data.X, data.Y)
+    plot3=plot(bias[1:95],y[1:95], reuse=false, xlabel = "U[V]", ylabel="1/C[nF]^2", seriestype = :scatter, title="Linear fit:")
+    plot!(data.X, model.(data.X), lw=3)
+    #plot3= plot(data.X, model.(data.X), legend=false, reuse = false, xlabel = "Voltage", ylabel="1/C[nF]^2", title="From linear fit:")
 
-    plot(plot1, plot2, layout = (2,1), legend=false) 
+    plot(plot1, plot2, plot3, layout = (3,1), legend=false) 
     
 end
  function calculate() #function for calculations 
@@ -48,7 +51,8 @@ end
     S          = 0.5*0.5
     q          = 1.602176565*10^-19 * u"C"
     N_derived = 2/(coef(ols)[2]*q*epsRelativ*eps0*S^2)
-    return N_derived
+    build_in_potential = coef(ols)[1]/coef(ols)[2]
+    return N_derived, build_in_potential
  end
 
  function print() #test function for printing values
