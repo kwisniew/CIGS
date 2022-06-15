@@ -122,7 +122,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     Na                = 1.0e15 / (cm^3)   
 
     ## we will impose this applied voltage on one boundary
-    voltageAcceptor   = -0.3 * V
+    voltageAcceptor   = -0.5 * V #keep this positive, it will be from -voltage acceptor to +voltage acceptor
 
     println("*** done\n")
     ################################################################################
@@ -344,10 +344,14 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     endVoltage                    = voltageAcceptor       # final bias value
 
     IV         = zeros(0)   
-    maxBias    = voltageAcceptor    
+    maxBias    = voltageAcceptor  
+    maxBias2   = -1*voltageAcceptor   
     biasSteps  = 101
     biasValues = collect(range(0, stop = maxBias, length = biasSteps))
+    biasValues2 = collect(range(0, stop=maxBias2, length = biasSteps))
     chargeDensities = zeros(0)
+    chargeDensities2 = zeros(0)
+    
 
     w_device = 1.0    * cm  # width of device
     z_device = 1.0    * cm  # depth of device
@@ -364,16 +368,19 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     for i in eachindex(biasValues)
 
         Δu = biasValues[i] # bias
+        jezuchryste = biasValues2[i] #HELP ME 
 
         ## set non equilibrium boundary condition
         #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
+
         set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
 
         ## increase generation rate with bias
         ctsys.data.λ2 = 10.0^(-biasSteps + i)
 
         println("bias: Δu = $(Δu)")
-
+        println("bias2: -Δu = $(jezuchryste)")
+     
         ## solve time step problems with timestep Δt
         solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
 
@@ -385,17 +392,24 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
         #push!(chargeDensities,chargeDensity(ctsys,solution)[regionAcceptorLeft])
         push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
+        set_contact!(ctsys, bregionAcceptorRight, Δu = jezuchryste)
+        push!(chargeDensities2,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
+
         initialGuess .= solution
 
     end # bias loop
 
+   
+
     println("*** done\n")
 
     ## compute static capacitance: check this is correctly computed
-    staticCapacitance = diff(chargeDensities) ./ diff(biasValues)
-    writedlm( "staticCapacitance.csv",  staticCapacitance, ',')
-    writedlm( "chargeDensities.csv"  ,  chargeDensities  , ',')
-    writedlm( "biasValues.csv"       ,  biasValues       , ',')
+    biasValuesfinal = vcat(biasValues2,biasValues)
+    chargeDensitiesfinal = vcat(chargeDensities2,chargeDensities)
+    staticCapacitancefinal = diff(chargeDensitiesfinal) ./ diff(biasValuesfinal)
+    writedlm( "staticCapacitance.csv",  staticCapacitancefinal, ',')
+    writedlm( "chargeDensities.csv"  ,  chargeDensitiesfinal  , ',')
+    writedlm( "biasValues.csv"       ,  biasValuesfinal       , ',')
 
     ## plot solution and IV curve
     if plotting 
