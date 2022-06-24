@@ -9,6 +9,7 @@ using GLM
 using Polynomials
 using Unitful
 
+
 #declaration of arrays and reading data form files
 biasValues        = zeros(0) #voltage
 staticCapacitance = zeros(0) #capacitance
@@ -18,6 +19,7 @@ filename2 = "biasValues.csv"
 filepath2 = joinpath(@__DIR__, filename2)
 staticCapacitance        = CSV.read(filepath  , DataFrame; header=false) 
 biasValues               = CSV.read(filepath2 , DataFrame; header=false) 
+popfirst!(biasValues.Column1)
 
 #One can get from capacitance-voltage (CV) relationship the values of "build in potential" and "doping density"
 #For details see eq. 3.10 in https://in.ncu.edu.tw/ncume_ee/SchottkyDiode.htm  
@@ -39,8 +41,8 @@ data = DataFrame(X=bias[1:(length(bias)-cutoff)],Y=y[1:(length(y)-cutoff)])
 
 #linear fit
 ols = lm(@formula(Y ~ X), data)
-intercept = coef(ols)[1]* u"1/F^2"
-slope = coef(ols)[2]* u"(1/F^2)/V"
+intercept = coef(ols)[1] #* u"1/F^2"
+slope = coef(ols)[2]#* u"(1/F^2)/V"
 
 #function to display plots
 function display_capacitance() 

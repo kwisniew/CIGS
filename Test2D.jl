@@ -33,7 +33,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     ## region numbers
     regionAcceptorLeft  = 1                           # n doped region
-    regionIntrinsic = 2                               # intrinsic region
+    regionIntrinsic     = 2                           # intrinsic region 
     regionAcceptorRight = 3                           # p doped region
     regions             = [regionAcceptorLeft, regionIntrinsic, regionAcceptorRight]
     numberOfRegions     = length(regions)
@@ -47,7 +47,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     ## grid
     refinementfactor        = 2^(n-1)
-    #h_pdoping_left               = 0.5 * μm
+    #h_pdoping_left         = 0.5 * μm
     h_pdoping_left          = 1 * μm
     h_intrinsic             = 3.00e-5 * cm
 

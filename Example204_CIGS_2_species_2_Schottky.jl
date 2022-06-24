@@ -404,8 +404,17 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     println("*** done\n")
 
     ## compute static capacitance: check this is correctly computed
-    biasValuesfinal = vcat(biasValues2,biasValues)
-    chargeDensitiesfinal = vcat(chargeDensities2,chargeDensities)
+    
+    biasValues = reverse(biasValues)
+    #popfirst!(biasValues)
+    
+    #chargeDensities = reverse(chargeDensities)
+    #popfirst!(chargeDensities)
+    #remove.biasValues1[0]
+    popfirst!(biasValues2)
+    popfirst!(chargeDensities2)
+    biasValuesfinal = vcat(biasValues,biasValues2)
+    chargeDensitiesfinal = vcat(chargeDensities,chargeDensities2)
     staticCapacitancefinal = diff(chargeDensitiesfinal) ./ diff(biasValuesfinal)
     writedlm( "staticCapacitance.csv",  staticCapacitancefinal, ',')
     writedlm( "chargeDensities.csv"  ,  chargeDensitiesfinal  , ',')
