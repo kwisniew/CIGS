@@ -29,7 +29,7 @@ y    = abs.(staticCapacitance.Column1).^-2
 #The capacitance is calculated by numerical differentiation of the uncompensated charge density with respect to voltage C(V)=dQ(V)/dV. 
 #One can argue that C calculated this way should be evaluated not in V, but V+dV/2: C(V+dV/2)= dQ(V)/dV
 #ASSUMPTION!: values in vector "biasValues" are equally spaced and this vector start from 0 (biasValues.Column1[0]=0)
-#TO DO: write the line below for any "biasValues" vector (without assumption)
+#TO DO: rewrite the line below for any "biasValues" vector (without assumption)
 bias = biasValues.Column1.+biasValues.Column1[2]/2
 #make sure that X and Y have the same length 
 bias = bias[1:length(y)]
@@ -42,15 +42,15 @@ data = DataFrame(X=bias[1:(length(bias)-cutoff)],Y=y[1:(length(y)-cutoff)])
 
 #linear fit
 ols = lm(@formula(Y ~ X), data)
-intercept = coef(ols)[1] #* u"1/F^2"
-slope = coef(ols)[2]#* u"(1/F^2)/V"
+intercept = coef(ols)[1]* u"1/F^2"
+slope = coef(ols)[2]* u"(1/F^2)/V"
 
 #function to display plots
 function display_capacitance() 
 
    #Capacitance vs Voltage Plot
    plot1=plot(biasValues.Column1[1:(length(biasValues.Column1)-cutoff)],abs.(staticCapacitance.Column1[1:(length(staticCapacitance.Column1)-cutoff)])*10^9,
-            reuse=false, xlabel = "U[V]", ylabel="C[nF]", seriestype = :scatter)
+              reuse=false, xlabel = "U[V]", ylabel="C[nF]", seriestype = :scatter)
    #1/C^2 vs Voltage Plot
    plot2=plot(bias[1:(length(bias)-cutoff)],y[1:(length(y)-cutoff)]*10^(-18), 
               reuse=false, xlabel = "U[V]", ylabel="1/C[nF]^2", seriestype = :scatter)

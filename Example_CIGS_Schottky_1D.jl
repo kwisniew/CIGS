@@ -5,7 +5,7 @@
 Simulating stationary charge transport in a pn junction with hole traps and a Schottky boundary condition.
 =#
 
-module Example204_CIGS_2_species_2_Schottky
+module Example_CIGS_Schottky_1D
 
 using VoronoiFVM
 using ChargeTransport

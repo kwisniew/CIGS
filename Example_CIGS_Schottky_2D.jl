@@ -1,16 +1,9 @@
 #=
-# PSC device on 2D domain (Tensor grid).
-([source code](SOURCE_URL))
-
-Simulating a three layer PSC device Pedot| MAPI | PCBM with mobile ions. The simulations are
-performed in 2D on a tensor grid, out of equilibrium and with abrupt interfaces.
-
-The paramters are from Calado et al.:
-https://github.com/barnesgroupICL/Driftfusion/blob/master/Input_files/pedotpss_mapi_pcbm.csv.
-(with adjustments on layer lengths)
+!!! WORK IN PROGRESS!!!
+In this file we will remove unnecessary materials and structures from the file "Example_of_2D_Grid_Perovskite" to achieve the same structure as in "Example_CIGS_Schottky_1D" but for 2D case
 =#
 
-module Ex201_PSC_tensorGrid
+module Example_CIGS_Schottky_2D
 
 using VoronoiFVM
 using ChargeTransport

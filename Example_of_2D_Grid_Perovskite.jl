@@ -10,7 +10,7 @@ https://github.com/barnesgroupICL/Driftfusion/blob/master/Input_files/pedotpss_m
 (with adjustments on layer lengths)
 =#
 
-module Ex201_PSC_tensorGrid
+module Example_of_2D_Grid_Perovskite
 
 using VoronoiFVM
 using ChargeTransport
