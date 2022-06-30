@@ -1,10 +1,11 @@
 #File to extract doping and build in potential from capacitance - voltage relationship
-#and is also used for postprocessing of data (plotting tests)
+#and it is also used for postprocessing of data (plotting tests)
 
 #declaration of modules
 using CSV 
 using DataFrames
 using Plots
+using PyPlot
 using GLM
 using Polynomials
 using Unitful
@@ -63,7 +64,6 @@ function display_capacitance()
     
 end
 #function for extracting doping and build in potential
-#TO DO: simplify units of outputs! 
 function cal_doping_and_build_in_pot()  
    eps0       = 8.85*10^-14 * u"F/cm"
    epsRelativ = 13.6 
