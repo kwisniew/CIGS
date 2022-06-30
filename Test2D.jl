@@ -5,7 +5,7 @@
 Simulating stationary charge transport in a pn junction with hole traps and a Schottky boundary condition.
 =#
 
-module Example204_CIGS_2_species_2_Schottky
+module Test2D
 
 using VoronoiFVM
 using ChargeTransport
@@ -14,7 +14,7 @@ using GridVisualize
 using PyPlot
 using DelimitedFiles
 
-## function to initialize the grid for a possible extension to other p-i-n devices.
+## function to initialize the grid for a possble extension to other p-i-n devices.
 function initialize_pin_grid(refinementfactor, h_pdoping_left, h_pdoping_right)
     coord_pdoping_left    = collect(range(0.0, stop = h_pdoping_left, length = 3 * refinementfactor))
     coord_pdoping_right  = collect(range(h_pdoping_left, stop = (h_pdoping_left + h_pdoping_right), length = 3 * refinementfactor))
@@ -29,23 +29,27 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     ################################################################################
     println("Set up grid and regions")
     ################################################################################
+    height          = 5.00e-6 * cm
 
     ## region numbers
     regionAcceptorLeft  = 1                           # n doped region
-    regionAcceptorRight = 2                           # p doped region
-    regions             = [regionAcceptorLeft, regionAcceptorRight]
+    regionIntrinsic     = 2                           # intrinsic region 
+    regionAcceptorRight = 3                           # p doped region
+    regions             = [regionAcceptorLeft, regionIntrinsic, regionAcceptorRight]
     numberOfRegions     = length(regions)
 
     ## boundary region numbers
     bregionAcceptorLeft     = 1
     bregionAcceptorRight    = 2
-    bregions                = [bregionAcceptorRight, bregionAcceptorLeft]
+    bregionNoFlux   = 3
+    bregions                = [bregionAcceptorRight, bregionNoFlux, bregionAcceptorLeft]
     numberOfBoundaryRegions = length(bregions)
 
     ## grid
     refinementfactor        = 2^(n-1)
-    #h_pdoping_left               = 0.5 * μm
+    #h_pdoping_left         = 0.5 * μm
     h_pdoping_left          = 1 * μm
+    h_intrinsic             = 3.00e-5 * cm
 
     coord                   = initialize_pin_grid(refinementfactor,
                                                   h_pdoping_left,
@@ -56,9 +60,11 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     ## set different regions in grid, doping profiles do not intersect
     ## n doped 
-    cellmask!(grid, [0.0 * μm], [h_pdoping_left], regionAcceptorLeft)          
+    cellmask!(grid, [0.0 * μm, 0.0* μm], [h_pdoping_left, height], regionAcceptorLeft, tol = 1.0e-18)  
+    #intrinsic doped
+    cellmask!(grid, [h_pdoping_left, 0.0], [h_pdoping_left+h_intrinsic, height], regionIntrinsic, tol = 1.0e-18)        
     ## p doped                    
-    cellmask!(grid, [h_pdoping_left], [h_pdoping_left + h_pdoping_left], regionAcceptorRight)    
+    cellmask!(grid, [h_pdoping_left+h_intrinsic], [h_pdoping_left + h_pdoping_left+h_intrinsic, height], regionAcceptorRight, tol = 1.0e-18)    
 
 
     if plotting
@@ -75,7 +81,8 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     iphin             = 1 # index electron quasi Fermi potential
     iphip             = 2 # index hole quasi Fermi potential
-    numberOfCarriers  = 2 # electrons, holes and no traps
+    iphia             = 3 # anion vacancy quasi Fermi potential
+    numberOfCarriers  = 3 # electrons, holes and no traps
     
     Ec_CIGS           = 1.1                  *  eV
     Ev_CIGS           = 0.0                  *  eV
@@ -136,7 +143,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     data.modelType                      = Stationary
 
     ## possible choices: Boltzmann, FermiDiracOneHalfBednarczyk, FermiDiracOneHalfTeSCA FermiDiracMinusOne, Blakemore
-    data.F                             .= [FermiDiracOneHalfTeSCA, FermiDiracOneHalfTeSCA]
+    data.F                             .= [Boltzmann,FermiDiracOneHalfTeSCA, FermiDiracOneHalfTeSCA]
 
     data.bulkRecombination              = set_bulk_recombination(;iphin = iphin, iphip = iphip,
                                                                  bulk_recomb_Auger = false,
@@ -171,7 +178,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     params.UT                                           = (kB * params.temperature) / q
     params.chargeNumbers[iphin]                         =  -1
     params.chargeNumbers[iphip]                         =  1
-    # params.chargeNumbers[iphit]                         =  1  # +1: hole trap is used
+    params.chargeNumbers[iphit]                         =  1  # +1: hole trap is used
 
     for ibreg in 1:numberOfBoundaryRegions   # boundary region data
         params.bDensityOfStates[iphin, ibreg]           = Nc
@@ -404,17 +411,8 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     println("*** done\n")
 
     ## compute static capacitance: check this is correctly computed
-    
-    biasValues = reverse(biasValues)
-    #popfirst!(biasValues)
-    
-    #chargeDensities = reverse(chargeDensities)
-    #popfirst!(chargeDensities)
-    #remove.biasValues1[0]
-    popfirst!(biasValues2)
-    popfirst!(chargeDensities2)
-    biasValuesfinal = vcat(biasValues,biasValues2)
-    chargeDensitiesfinal = vcat(chargeDensities,chargeDensities2)
+    biasValuesfinal = vcat(biasValues2,biasValues)
+    chargeDensitiesfinal = vcat(chargeDensities2,chargeDensities)
     staticCapacitancefinal = diff(chargeDensitiesfinal) ./ diff(biasValuesfinal)
     writedlm( "staticCapacitance.csv",  staticCapacitancefinal, ',')
     writedlm( "chargeDensities.csv"  ,  chargeDensitiesfinal  , ',')
