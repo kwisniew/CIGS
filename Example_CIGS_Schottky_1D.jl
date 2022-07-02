@@ -24,7 +24,7 @@ function initialize_pin_grid(refinementfactor, h_pdoping_left, h_pdoping_right)
     return coord
 end
 
-function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
+function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
 
     ################################################################################
     println("Set up grid and regions")
@@ -122,7 +122,8 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     Na                = 1.0e15 / (cm^3)   
 
     ## we will impose this applied voltage on one boundary
-    voltageAcceptor   = -0.5 * V #keep this positive, it will be from -voltage acceptor to +voltage acceptor
+    voltageMin   = voltageMin * V 
+    voltageMax   = voltageMax * V
 
     println("*** done\n")
     ################################################################################
@@ -293,22 +294,22 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     ## initialize solution and starting vectors
     initialGuess          = unknowns(ctsys)
+    equilibriumSolution   = unknowns(ctsys)
     solution              = unknowns(ctsys)
 
     #data.calculationType = inEquilibrium 
 
     ## solve thermodynamic equilibrium and update initial guess
     solution              = equilibrium_solve!(ctsys, control = control, nonlinear_steps = 20)
-    initialGuess         .= solution 
+    equilibriumSolution  .= solution  
+    initialGuess         .= solution
+
 
     println("*** done\n")
 
 
     if plotting 
         ## ##### set legend for plotting routines #####
-        #label_energy   = Array{String, 2}(undef, 2, numberOfCarriers) # band-edge energies and potential 
-        #label_density  = Array{String, 1}(undef, numberOfCarriers)
-        #label_solution = Array{String, 1}(undef, numberOfCarriers)
         label_solution, label_density, label_energy = set_plotting_labels(data)
 
         ## for electrons 
@@ -341,16 +342,21 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     
     ## set calculationType to OutOfEquilibrium for starting with respective simulation.
     data.calculationType = OutOfEquilibrium      # Rn = Rp = R, since the model type is stationary
-    endVoltage                    = voltageAcceptor       # final bias value
+    endVoltage                    = voltageMin       # final bias value
 
     IV         = zeros(0)   
-    maxBias    = voltageAcceptor  
-    maxBias2   = -1*voltageAcceptor   
+    #maxBias    = voltageMin  
+    #maxBias2   = -1*voltageMin   
     biasSteps  = 101
-    biasValues = collect(range(0, stop = maxBias, length = biasSteps))
-    biasValues2 = collect(range(0, stop=maxBias2, length = biasSteps))
+    biasValues = collect(range(voltageMin, stop = voltageMax, length = biasSteps))
+    if(!(0.0 in biasValues))
+        append!(biasValues, 0.0)
+        sort!(biasValues)
+    end
+    print(biasValues)
+    #biasValues2 = collect(range(0, stop= maxBias2, length = biasSteps))
     chargeDensities = zeros(0)
-    chargeDensities2 = zeros(0)
+    #chargeDensities2 = zeros(0)
     
 
     w_device = 1.0    * cm  # width of device
@@ -365,10 +371,14 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     control.max_iterations    = 30
     control.max_round         = 3
 
-    for i in eachindex(biasValues)
+    
+    indexOfZero = indexin(0.0, biasValues)[1]
+    i = indexOfZero
 
+    #for i in eachindex(biasValues)
+    while (i>0)
         Δu = biasValues[i] # bias
-        jezuchryste = biasValues2[i] #HELP ME 
+        #jezuchryste = biasValues2[i] #HELP ME 
 
         ## set non equilibrium boundary condition
         #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
@@ -377,9 +387,8 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
         ## increase generation rate with bias
         ctsys.data.λ2 = 10.0^(-biasSteps + i)
-
         println("bias: Δu = $(Δu)")
-        println("bias2: -Δu = $(jezuchryste)")
+        #println("bias2: -Δu = $(jezuchryste)")
      
         ## solve time step problems with timestep Δt
         solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
@@ -388,37 +397,54 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
         current = get_current_val(ctsys, solution)
         push!(IV, w_device * z_device * current)
 
-        ## store CHARGE DENSITY in donor region (ZnO) --> SHOULD BE: CHARGE?
+        ## store CHARGE DENSITY in CIGS
         #push!(chargeDensities,chargeDensity(ctsys,solution)[regionAcceptorLeft])
         push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
-        set_contact!(ctsys, bregionAcceptorRight, Δu = jezuchryste)
-        push!(chargeDensities2,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
+        #set_contact!(ctsys, bregionAcceptorRight, Δu = jezuchryste)
+        #push!(chargeDensities2,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
         initialGuess .= solution
+        i=i-1
+    end # bias loop 1
 
-    end # bias loop
+    reverse!(IV)
+    reverse!(chargeDensities)
+    
+    i = indexOfZero+1
+    initialGuess .= equilibriumSolution
+
+    while (i<=length(biasValues))
+        Δu = biasValues[i] # bias
+
+        ## set non equilibrium boundary condition
+        #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
+        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
+    
+        ## solve time step problems with timestep Δt
+        solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
+
+        ## save IV data
+        current = get_current_val(ctsys, solution)
+        push!(IV, w_device * z_device * current)
+
+        ## store uncompensated CHARGE DENSITY in CIGS
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
+
+        initialGuess .= solution
+        i=i+1
+    end # bias loop 2
 
    
 
     println("*** done\n")
 
     ## compute static capacitance: check this is correctly computed
-    
-    biasValues = reverse(biasValues)
-    #popfirst!(biasValues)
-    
-    #chargeDensities = reverse(chargeDensities)
-    #popfirst!(chargeDensities)
-    #remove.biasValues1[0]
-    popfirst!(biasValues2)
-    popfirst!(chargeDensities2)
-    biasValuesfinal = vcat(biasValues,biasValues2)
-    chargeDensitiesfinal = vcat(chargeDensities,chargeDensities2)
-    staticCapacitancefinal = diff(chargeDensitiesfinal) ./ diff(biasValuesfinal)
-    writedlm( "staticCapacitance.csv",  staticCapacitancefinal, ',')
-    writedlm( "chargeDensities.csv"  ,  chargeDensitiesfinal  , ',')
-    writedlm( "biasValues.csv"       ,  biasValuesfinal       , ',')
+
+    staticCapacitance = diff(chargeDensities) ./ diff(biasValues)
+    writedlm( "staticCapacitance.csv",  staticCapacitance, ',')
+    writedlm( "chargeDensities.csv"  ,  chargeDensities  , ',')
+    writedlm( "biasValues.csv"       ,  biasValues       , ',')
 
     ## plot solution and IV curve
     if plotting 
@@ -428,83 +454,18 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
         Plotter.figure()
 #        plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
 #        Plotter.figure()
-        plot_IV(Plotter, biasValuesfinal,IV, biasValuesfinal[end], plotGridpoints = true)
+        plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
         Plotter.figure()
-        plot_IV(Plotter, biasValuesfinal,chargeDensitiesfinal, biasValuesfinal[end], plotGridpoints = true)
+        plot_IV(Plotter, biasValues,chargeDensities, biasValues[end], plotGridpoints = true)
         Plotter.title("Charge density in donor region")
         Plotter.ylabel("Charge density [C]")
         Plotter.figure()
-        plot_IV(Plotter, biasValuesfinal,staticCapacitancefinal, biasValuesfinal[end-1], plotGridpoints = true)
+        plot_IV(Plotter, biasValues,staticCapacitance, biasValues[end-1], plotGridpoints = true)
         Plotter.title("Static capacitance in donor region")
-        Plotter.ylabel("Static capacitance [C/V]")
-        
-        ## Plotter.figure()
-        ## Plotter.yscale("symlog")
-        ## dens = compute_densities!(grid, data, solution)
-        ## n = dens[iphin,:] #.*1e6 # cm^(-3)
-        ## p = dens[iphip,:] #.*1e6 # cm^(-3)
-        ## t = dens[iphit,:]
-        ## # p_tr = N_t - n_tr
-        ## plot(coord, 1e-6*(Nt .- (p0*Nt .+ n.*Nt) ./ ((p0 .+p) .+ (n0 .+n))) )
-        ## Plotter.title("Check p_traps agrees with computed traps" )
-
-        ## Plotter.figure()
-        ## Plotter.yscale("symlog")
-        ## plot(coord, 1e-6*t .- 1e-6*(Nt .- (p0*Nt .+ n.*Nt) ./ ((p0 .+p) .+ (n0 .+n))) )
-        ## Plotter.title("Error" )
-        
+        Plotter.ylabel("Static capacitance [F]")
+               
     end
-    
-
-    ## ipsi                          = data.index_psi
-    ## number_tsteps                 = 41
-    ## tend                          = 1*s
-    ## tvalues                       = range(0,stop=tend,length=number_tsteps)
-
-    ## time loop
-    ## for istep = 2:number_tsteps
-
-    ##     t                     = tvalues[istep]          # Actual time
-    ##     Δt                    = t - tvalues[istep-1]    # Time step size
-
-    ##     if verbose
-    ##         println("time:  = $(t)")
-    ##     end
-
-    ##      # Solve time step problems with timestep Δt
-    ##     solve!(solution, initialGuess, ctsys, control  = control, tstep = Δt)
-
-    ##     # get I-V data
-    ##     current = get_current_val(ctsys, solution)
-
-    ##     push!(IV, w_device * z_device * current)
-    ##     push!(biasValues,endVoltage)
-
-    ##     initialGuess .= solution
-
-    ## end # time loop
-
-    ## if test == false
-    ##     println("*** done\n")
-    ## end    
-
-    ## plot solution and IV curve
-    ## if plotting 
-    ##     plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(tend)\$", label_energy)
-    ##     Plotter.figure()
-    ##     plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(endVoltage), \$ t=$(tend)\$", label_density)
-    ##     Plotter.figure()
-    ##     plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(tend)\$", label_solution)
-    ##     Plotter.figure()
-    ##     plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
-    ## end
-
-    ## println("Max error")
-    ## @show max(abs.(solution_stationary_bias[iphin,:].-solution[iphin,:])...)
-    ## @show max(abs.(solution_stationary_bias[iphip,:].-solution[iphip,:])...)
-    ## @show max(abs.(solution_stationary_bias[iphit,:].-solution[iphit,:])...)
-    ## @show max(abs.(solution_stationary_bias[ipsi,:].-solution[ipsi,:])...)
-
+ 
     testval = solution[data.index_psi, 10]
     return testval
 
