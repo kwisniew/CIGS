@@ -5,7 +5,7 @@
 using CSV 
 using DataFrames
 using Plots
-using PyPlot
+#using PyPlot
 using GLM
 using Polynomials
 using Unitful
@@ -20,7 +20,7 @@ filename2 = "biasValues.csv"
 filepath2 = joinpath(@__DIR__, filename2)
 staticCapacitance        = CSV.read(filepath  , DataFrame; header=false) 
 biasValues               = CSV.read(filepath2 , DataFrame; header=false) 
-popfirst!(biasValues.Column1)
+#popfirst!(biasValues.Column1)
 
 #One can get from capacitance-voltage (CV) relationship the values of "build in potential" and "doping density"
 #For details see eq. 3.10 in https://in.ncu.edu.tw/ncume_ee/SchottkyDiode.htm  
@@ -29,11 +29,10 @@ y    = abs.(staticCapacitance.Column1).^-2
 #The capacitance is calculated by numerical differentiation of the uncompensated charge density with respect to voltage C(V)=dQ(V)/dV. 
 #One can argue that C calculated this way should be evaluated not in V, but V+dV/2: C(V+dV/2)= dQ(V)/dV
 #ASSUMPTION!: values in vector "biasValues" are equally spaced and this vector start from 0 (biasValues.Column1[0]=0)
-#TO DO: rewrite the line below for any "biasValues" vector (without assumption)
-bias = biasValues.Column1.+biasValues.Column1[2]/2
+bias = biasValues.Column1[1:(length(biasValues.Column1)-1)] .+ diff(biasValues.Column1/2)
 #make sure that X and Y have the same length 
 bias = bias[1:length(y)]
-bias = abs.(bias)
+#bias = abs.(bias)
 
 #The last few values of C deviates from other, so we artificially cut of the last five of it
 cutoff = 5
@@ -56,11 +55,11 @@ function display_capacitance()
               reuse=false, xlabel = "U[V]", ylabel="1/C[nF]^2", seriestype = :scatter)
    
    #linear function based on linear fit
-   model(x) = intercept + slope * x
+   model(x) = intercept + slope * (x* u"V") 
    #1/C^2 vs Voltage Plot with a line on the top of it 
    plot3=plot(bias[1:(length(bias)-cutoff)],y[1:(length(y)-cutoff)]*10^(-18), 
               reuse=false, xlabel = "U[V]", ylabel="1/C[nF]^2", seriestype = :scatter, title="Linear fit:")
-   plot!(data.X, model.(data.X)*10^(-18), lw=3)
+   plot!(data.X, model.(data.X)*10^(-18)* u"F^2", lw=3)
 
    plot(plot1, plot2, plot3, layout = (3,1), legend=false) 
     

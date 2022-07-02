@@ -460,7 +460,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         Plotter.title("Charge density in donor region")
         Plotter.ylabel("Charge density [C]")
         Plotter.figure()
-        plot_IV(Plotter, biasValues,staticCapacitance, biasValues[end-1], plotGridpoints = true)
+        plot_IV(Plotter, biasValues,abs.(staticCapacitance), biasValues[end-1], plotGridpoints = true)
         Plotter.title("Static capacitance in donor region")
         Plotter.ylabel("Static capacitance [F]")
                
