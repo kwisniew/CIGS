@@ -3,7 +3,7 @@
 Simulating stationary charge transport in a pn junction with hole traps and a Schottky boundary condition.
 =#
 
-module Example_CIGS_Schottky_1D
+module Example_CIGS_Schottky_2D_test
 
 using VoronoiFVM
 using ChargeTransport
@@ -37,26 +37,45 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     ## boundary region numbers
     bregionAcceptorLeft     = 1
     bregionAcceptorRight    = 2
-    bregions                = [bregionAcceptorRight, bregionAcceptorLeft]
+    bregionNoFlux           = 3
+    bregions                = [bregionAcceptorRight, bregionAcceptorLeft, bregionNoFlux]
     numberOfBoundaryRegions = length(bregions)
 
     ## grid
-    refinementfactor        = 2^(n-1)
-    #h_pdoping_left               = 0.5 * μm
-    h_pdoping_left          = 1 * μm
+    h_pdoping       = 1 * μm
+    h_intrinsic     = 0.00e-5 * cm
+    h_ndoping       = 1 * μm
+    height          = 1 * μm
 
-    coord                   = initialize_pin_grid(refinementfactor,
-                                                  h_pdoping_left,
-                                                  h_pdoping_left,
-                                                 )
+    x0              = 0.0 * μm
+    δ               = 3*n        # the larger, the finer the mesh
+    t               = 0.5*(cm)/δ # tolerance for geomspace and glue (with factor 10)
 
-    grid                    = simplexgrid(coord)
+    # coord_p_u       = collect(range(x0, h_pdoping, step=h_pdoping/(0.3*δ)))
+    coord_p_u       = collect(range(x0, h_pdoping, step=h_pdoping/(δ)))
+    coord_n_u       = collect(range(h_pdoping, h_pdoping+h_ndoping, step=h_pdoping/(δ)))
 
-    ## set different regions in grid, doping profiles do not intersect
-    ## n doped 
-    cellmask!(grid, [0.0 * μm], [h_pdoping_left], regionAcceptorLeft)          
-    ## p doped                    
-    cellmask!(grid, [h_pdoping_left], [h_pdoping_left + h_pdoping_left], regionAcceptorRight)    
+    coord_length    = glue(coord_p_u,    coord_n_u,  tol=10*t)
+
+    height_L        = geomspace(0.0, height/2, height/(0.5*δ), height/(0.5*δ))
+    height_R        = geomspace(height/2, height, height/(0.5*δ), height/(0.5*δ))
+    coord_height    = glue(height_L, height_R, tol = 10*t)
+
+    grid            = simplexgrid(coord_length, coord_height)
+
+    ## specify inner regions
+    cellmask!(grid, [0.0, 0.0],                     [h_pdoping, height],                           regionAcceptorLeft, tol = 1.0e-18)  # p-doped region   = 1
+    #cellmask!(grid, [h_pdoping, 0.0],               [h_pdoping + h_intrinsic, height],             regionIntrinsic, tol = 1.0e-18) # intrinsic region = 2
+    cellmask!(grid, [h_pdoping , 0.0], [h_pdoping  + h_ndoping, height], regionAcceptorRight, tol = 1.0e-18)     # n-doped region   = 3
+
+    ## specifiy outer regions
+    ## metal interfaces
+    bfacemask!(grid, [0.0, 0.0], [0.0, height], bregionAcceptorLeft) # BregionNumber = 1
+    bfacemask!(grid, [h_pdoping  + h_ndoping, 0.0], [h_pdoping  + h_ndoping, height], bregionAcceptorRight) # BregionNumber = 2
+
+    ## no flux interfaces [xmin, ymin], [xmax, ymax]
+    bfacemask!(grid, [0.0, 0.0], [h_pdoping  + h_ndoping, 0.0], bregionNoFlux) # BregionNumber = 3
+    bfacemask!(grid, [0.0, height], [h_pdoping  + h_ndoping, height], bregionNoFlux) # # BregionNumber = 3
 
 
     if plotting
