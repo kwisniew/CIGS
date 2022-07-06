@@ -1,6 +1,6 @@
 #=
-!!! WORK IN PROGRESS!!!
-In this file we will remove unnecessary materials and structures from the file "Example_of_2D_Grid_Perovskite" to achieve the same structure as in "Example_CIGS_Schottky_1D" but for 2D case
+# CIGS pn junction: stationary with trap and Schottky contacts.
+Simulating stationary charge transport in a pn junction with hole traps and a Schottky boundary condition.
 =#
 
 module Example_CIGS_Schottky_2D
@@ -10,27 +10,36 @@ using ChargeTransport
 using ExtendableGrids
 using GridVisualize
 using PyPlot
+using DelimitedFiles
 
-function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:dense)
+## function to initialize the grid for a possible extension to other p-i-n devices.
+function initialize_pin_grid(refinementfactor, h_pdoping_left, h_pdoping_right)
+    coord_pdoping_left    = collect(range(0.0, stop = h_pdoping_left, length = 3 * refinementfactor))
+    coord_pdoping_right  = collect(range(h_pdoping_left, stop = (h_pdoping_left + h_pdoping_right), length = 3 * refinementfactor))
+                                 
+    coord            = glue(coord_pdoping_left, coord_pdoping_right)
+
+    return coord
+end
+
+function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
 
     ################################################################################
-    if test == false
-        println("Set up grid and regions")
-    end
+    println("Set up grid and regions")
     ################################################################################
 
     ## region numbers
-    regionAcceptor  = 1                           # p doped region
-    #regionIntrinsic = 2                           # intrinsic region
-    regionDonor     = 2                           # n doped region
-    #regions         = [regionAcceptor, regionIntrinsic, regionDonor]
-    regions         = [regionAcceptor, regionDonor]
-    numberOfRegions = length(regions)
+    regionAcceptorLeft  = 1                           # n doped region
+    regionAcceptorRight = 2                           # p doped region
+    regions             = [regionAcceptorLeft, regionAcceptorRight]
+    numberOfRegions     = length(regions)
 
     ## boundary region numbers
-    bregionAcceptor = 1
-    bregionDonor    = 2
-    bregionNoFlux   = 3
+    bregionAcceptorLeft     = 1
+    bregionAcceptorRight    = 2
+    bregionNoFlux           = 3
+    bregions                = [bregionAcceptorRight, bregionAcceptorLeft, bregionNoFlux]
+    numberOfBoundaryRegions = length(bregions)
 
     ## grid
     h_pdoping       = 1 * μm
@@ -41,37 +50,11 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     x0              = 0.0 * μm
     δ               = 3*n        # the larger, the finer the mesh
     t               = 0.5*(cm)/δ # tolerance for geomspace and glue (with factor 10)
-    k               = 1.5        # the closer to 1, the closer to the boundary geomspace works
 
     # coord_p_u       = collect(range(x0, h_pdoping, step=h_pdoping/(0.3*δ)))
     coord_p_u       = collect(range(x0, h_pdoping, step=h_pdoping/(δ)))
-    # coord_p_g       = geomspace(h_pdoping/2,
-    #                             h_pdoping,
-    #                             h_pdoping/(0.4*δ),
-    #                             h_pdoping/(1.1*δ),
-    #                             tol=t)
-    # coord_i_g1      = geomspace(h_pdoping,
-    #                             h_pdoping+h_intrinsic/k,
-    #                             h_intrinsic/(6.8*δ),
-    #                             h_intrinsic/(0.8*δ),
-    #                             tol=t)
-    # coord_i_g2      = geomspace(h_pdoping+h_intrinsic/k,
-    #                             h_pdoping+h_intrinsic,
-    #                             h_intrinsic/(0.8*δ),
-    #                             h_intrinsic/(7.8*δ),
-    #                             tol=t)
-    # coord_n_g       = geomspace(h_pdoping,
-    #                             h_pdoping+h_ndoping/2,
-    #                             h_ndoping/(2.8*δ),
-    #                             h_ndoping/(0.5*δ),
-    #                             tol=t)
-    # coord_n_u       = collect(range(h_pdoping+h_ndoping/2, h_pdoping+h_ndoping, step=h_pdoping/(0.1*δ)))
     coord_n_u       = collect(range(h_pdoping, h_pdoping+h_ndoping, step=h_pdoping/(δ)))
 
-    #coord           = glue(coord_p_u,coord_p_g,  tol=10*t)
-    # coord           = glue(coord,    coord_i_g1, tol=10*t)
-    # coord           = glue(coord,    coord_i_g2, tol=10*t)
-    #coord           = glue(coord,    coord_n_g,  tol=10*t)
     coord_length    = glue(coord_p_u,    coord_n_u,  tol=10*t)
 
     height_L        = geomspace(0.0, height/2, height/(0.5*δ), height/(0.5*δ))
@@ -81,423 +64,458 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     grid            = simplexgrid(coord_length, coord_height)
 
     ## specify inner regions
-    cellmask!(grid, [0.0, 0.0],                     [h_pdoping, height],                           regionAcceptor, tol = 1.0e-18)  # p-doped region   = 1
+    cellmask!(grid, [0.0, 0.0],                     [h_pdoping, height],                           regionAcceptorLeft, tol = 1.0e-18)  # p-doped region   = 1
     #cellmask!(grid, [h_pdoping, 0.0],               [h_pdoping + h_intrinsic, height],             regionIntrinsic, tol = 1.0e-18) # intrinsic region = 2
-    cellmask!(grid, [h_pdoping , 0.0], [h_pdoping  + h_ndoping, height], regionDonor, tol = 1.0e-18)     # n-doped region   = 3
+    cellmask!(grid, [h_pdoping , 0.0], [h_pdoping  + h_ndoping, height], regionAcceptorRight, tol = 1.0e-18)     # n-doped region   = 3
 
     ## specifiy outer regions
     ## metal interfaces
-    bfacemask!(grid, [0.0, 0.0], [0.0, height], bregionAcceptor) # BregionNumber = 1
-    bfacemask!(grid, [h_pdoping  + h_ndoping, 0.0], [h_pdoping  + h_ndoping, height], bregionDonor) # BregionNumber = 2
+    bfacemask!(grid, [0.0, 0.0], [0.0, height], bregionAcceptorLeft) # BregionNumber = 1
+    bfacemask!(grid, [h_pdoping  + h_ndoping, 0.0], [h_pdoping  + h_ndoping, height], bregionAcceptorRight) # BregionNumber = 2
 
     ## no flux interfaces [xmin, ymin], [xmax, ymax]
     bfacemask!(grid, [0.0, 0.0], [h_pdoping  + h_ndoping, 0.0], bregionNoFlux) # BregionNumber = 3
     bfacemask!(grid, [0.0, height], [h_pdoping  + h_ndoping, height], bregionNoFlux) # # BregionNumber = 3
 
+
     if plotting
-        gridplot(grid, Plotter= Plotter, resolution=(600,400),linewidth=0.5, legend=:lt)
+        gridplot(grid, Plotter = Plotter, legend=:lt)
         Plotter.title("Grid")
+        Plotter.figure()
     end
 
-    if test == false
-        println("*** done\n")
-    end
+    println("*** done\n")
 
     ################################################################################
-    if test == false
-        println("Define physical parameters and model")
-    end
+    println("Define physical parameters and model")
     ################################################################################
 
-    ## set indices of the quasi Fermi potentials
-    iphin            = 1 # electron quasi Fermi potential
-    iphip            = 2 # hole quasi Fermi potential
-    #iphia            = 3 # anion vacancy quasi Fermi potential
-    # numberOfCarriers = 3
-    numberOfCarriers = 2
+    iphin             = 1 # index electron quasi Fermi potential
+    iphip             = 2 # index hole quasi Fermi potential
+    numberOfCarriers  = 2 # electrons, holes and no traps
+    
+    Ec_CIGS           = 1.1                  *  eV
+    Ev_CIGS           = 0.0                  *  eV
 
-    ## temperature
-    T                = 300.0                 *  K
+    Nc                = 4.351959895879690e17 / (cm^3)
+    Nv                = 9.139615903601645e18 / (cm^3)
+    Nt                = 5e14                / (cm^3)   
+    Nt_low            = Nt#/1e3                        
+    mun_CIGS          = 100.0                * (cm^2) / (V * s)
+    mup_CIGS          = 25                   * (cm^2) / (V * s)
+    mun_ZnO           = 100                  * (cm^2) / (V * s)
+    mup_ZnO           = 25                   * (cm^2) / (V * s)
+    mut               = 0                    * (cm^2) / (V * s)  # no flux for traps
+    εr_CIGS           = 13.6                 *  1.0              
+    εr_ZnO            = 9                    *  1.0                
+    T                 = 300.0                *  K
 
-    ## band edge energies
-    Ec_a             = -1.1                  *  eV
-    Ev_a             =  0.0                  *  eV
+    An                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
+    Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
+    vn                = An * T^2 / (q*Nc)
+    vp                = Ap * T^2 / (q*Nv)
+    barrier_right     = Ev_CIGS + 0.4 * eV
+    barrier_left      = Ev_CIGS + 0.6 * eV
 
-    #Ec_i             = -3.8                  *  eV
-    #Ev_i             = -5.4                  *  eV
+    ## recombination parameters
+    #=
+    ni_CIGS           = sqrt(Nc * Nv) * exp(-(Ec_CIGS - Ev_CIGS) / (2 * kB * T)) # intrinsic concentration
+    n0_CIGS           = Nc * Boltzmann( (Et-Ec_CIGS) / (kB*T) )             # Boltzmann equilibrium concentration
+    p0_CIGS           = ni_CIGS^2 / n0_CIGS                                      # Boltzmann equilibrium concentration
+    ni_ZnO            = sqrt(Nc * Nv) * exp(-(Ec_ZnO - Ev_ZnO) / (2 * kB * T)) # intrinsic concentration
+    n0_ZnO            = Nc * Boltzmann( (Et-Ec_ZnO) / (kB*T) )             # Boltzmann equilibrium concentration
+    p0_ZnO            = ni_ZnO^2 / n0_ZnO                                      # Boltzmann equilibrium concentration
+    =#
+    Auger             = 1.0e-29  * cm^6 / s          # 1.0e-41 m^6 / s
+    SRH_LifeTime      = 1.0e-3   * ns               
+    Radiative         = 1.0e-10  * cm^3 / s          # 1.0e-16 m^3 / s
+    G                 = 1.0e20   / (cm^3 * s)
+    ## ???
+    A_CIGS            = 1.0e5    / cm
+    A_ZnO             = 0.0      / cm
+    N0                = 1e17     / cm^2/s
 
-    Ec_d             = -1.1                  *  eV
-    Ev_d             = -0.0                  *  eV
+    ## doping -- trap doping will not be set and thus automatically zero
+    Na                = 1.0e15 / (cm^3)   
 
-    # EC               = [Ec_a, Ec_i, Ec_d]
-    # EV               = [Ev_a, Ev_i, Ev_d]
-    EC               = [Ec_a, Ec_d]
-    EV               = [Ev_a, Ev_d]
+    ## we will impose this applied voltage on one boundary
+    voltageMin   = voltageMin * V 
+    voltageMax   = voltageMax * V
 
-    ## effective densities of state
-    Nc_a             = 1.0e19                / (cm^3)
-    Nv_a             = 1.0e19                / (cm^3)
-
-    #Nc_i             = 1.0e19                / (cm^3)
-    #Nv_i             = 1.0e19                / (cm^3)
-
-    ## ############ adjust Na, Ea for anion vacancies here ###########
-    #Nanion           = 1.0e18                / (cm^3)
-    #Ea_i             = -4.4                  *  eV
-    ## for the labels in the figures
-    #textEa           = Ea_i./eV
-    #textNa           = Nanion.*cm^3
-    ## ############ adjust Na, Ea for anion vacancies here ###########
-    # EA               = [0.0,  Ea_i,  0.0]
-
-    Nc_d             = 1.0e19                / (cm^3)
-    Nv_d             = 1.0e19                / (cm^3)
-
-    # NC               = [Nc_a, Nc_i, Nc_d]
-    # NV               = [Nv_a, Nv_i, Nv_d]
-    # NAnion           = [0.0,  Nanion, 0.0]
-
-    NC               = [Nc_a, Nc_d]
-    NV               = [Nv_a, Nv_d]
-
-    ## mobilities
-    μn_a             = 0.1                   * (cm^2) / (V * s)
-    μp_a             = 0.1                   * (cm^2) / (V * s)
-
-    # μn_i             = 2.00e1                * (cm^2) / (V * s)
-    # μp_i             = 2.00e1                * (cm^2) / (V * s)
-    # μa_i             = 1.00e-10              * (cm^2) / (V * s)
-
-    μn_d             = 1.0e-3                * (cm^2) / (V * s)
-    μp_d             = 1.0e-3                * (cm^2) / (V * s)
-
-    # μn               = [μn_a, μn_i, μn_d]
-    # μp               = [μp_a, μp_i, μp_d]
-    # μa               = [0.0,  μa_i, 0.0 ]
-
-    μn               = [μn_a, μn_d]
-    μp               = [μp_a, μp_d]
-
-    ## relative dielectric permittivity
-    ε_a              = 13.0                   *  1.0
-    # ε_i              = 23.0                  *  1.0
-    ε_d              = 13.0                   *  1.0
-
-    # ε                = [ε_a, ε_i, ε_d]
-    ε                = [ε_a, ε_d]
-    ## radiative recombination
-    r0_a             = 6.3e-11               * cm^3 / s
-    # r0_i             = 3.6e-12               * cm^3 / s
-    r0_d             = 6.8e-11               * cm^3 / s
-
-    # r0               = [r0_a, r0_i, r0_d]
-    r0               = [r0_a, r0_d]
-
-    ## life times and trap densities
-    τn_a             = 1.0e-6                * s
-    τp_a             = 1.0e-6                * s
-
-    # τn_i             = 1.0e-7                * s
-    # τp_i             = 1.0e-7                * s
-    τn_d             = τn_a
-    τp_d             = τp_a
-
-    # τn               = [τn_a, τn_i, τn_d]
-    # τp               = [τp_a, τp_i, τp_d]
-    τn               = [τn_a, τn_d]
-    τp               = [τp_a, τp_d]
-
-    ## SRH trap energies (needed for calculation of trap_density! (SRH))
-    Ei_a             = -4.05                * eV
-    # Ei_i             = -4.60                * eV
-    Ei_d             = -5.00                * eV
-
-    # EI               = [Ei_a, Ei_i, Ei_d]
-    EI               = [Ei_a, Ei_d]
-
-    ## Auger recombination
-    Auger            = 0.0
-
-    ## doping
-    Nd               = 1.0e15  / (cm^3)
-    Na               = 1.0e15 / (cm^3)
-    C0               = 1.0e18               / (cm^3)
-
-    ## contact voltage
-    voltageAcceptor  = 1.0                  * V
-
-    if test == false
-        println("*** done\n")
-    end
-
+    println("*** done\n")
     ################################################################################
-    if test == false
-        println("Define System and fill in information about model")
-    end
+    println("Define System and fill in information about model")
     ################################################################################
 
-    ## Initialize Data instance and fill in data
-    data                               = Data(grid, numberOfCarriers)
+    ## initialize Data instance and fill in data
+    data                                = Data(grid, numberOfCarriers)
 
-    ## Possible choices: Stationary, Transient
-    data.modelType                     = Transient
+    ## possible choices: model_stationary, model_transient
+    data.modelType                      = Stationary
 
-    ## Possible choices: Boltzmann, FermiDiracOneHalfBednarczyk, FermiDiracOneHalfTeSCA,
-    ## FermiDiracMinusOne, Blakemore
-    # data.F                             = [Boltzmann, Boltzmann, FermiDiracMinusOne]
-    data.F                             = [Boltzmann, Boltzmann]
+    ## possible choices: Boltzmann, FermiDiracOneHalfBednarczyk, FermiDiracOneHalfTeSCA FermiDiracMinusOne, Blakemore
+    data.F                             .= [FermiDiracOneHalfTeSCA, FermiDiracOneHalfTeSCA]
 
-    data.bulkRecombination             = set_bulk_recombination(;iphin = iphin, iphip = iphip,
+    data.bulkRecombination              = set_bulk_recombination(;iphin = iphin, iphip = iphip,
                                                                  bulk_recomb_Auger = false,
                                                                  bulk_recomb_radiative = false,
                                                                  bulk_recomb_SRH = false)
 
+    #enable_traps!(data)
+    
+    ## Possible choices: GenerationNone, GenerationUniform, GenerationBeerLambert
+    data.generationModel                = GenerationBeerLambert
+
     ## Possible choices: OhmicContact, SchottkyContact (outer boundary) and InterfaceModelNone,
     ## InterfaceModelSurfaceReco (inner boundary).
-    data.boundaryType[bregionAcceptor] = OhmicContact
-    data.boundaryType[bregionDonor]    = OhmicContact
-
-    ## Present ionic vacancies in perovskite layer
-    #data.enableIonicCarriers           = enable_ionic_carriers(ionic_carriers = [iphia], regions = [regionIntrinsic])
-
+    #data.boundary_type[bregionAcceptorLeft ]    = ohmic_contact#schottky_contact                       
+    #data.boundary_type[bregionAcceptorRight]    = ohmic_contact#schottky_contact   
+    data.boundaryType[bregionAcceptorLeft ]    = SchottkyContact                       
+    data.boundaryType[bregionAcceptorRight]    = OhmicContact   
+    
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation             = ExcessChemicalPotential
-
-    if test == false
-        println("*** done\n")
-    end
+    data.fluxApproximation              = ExcessChemicalPotential
+   
+    println("*** done\n")
 
     ################################################################################
-    if test == false
-        println("Define Params and fill in physical parameters")
-    end
+    println("Define Params and fill in physical parameters")
     ################################################################################
 
+    ## physical parameters
     params                                              = Params(grid, numberOfCarriers)
-
     params.temperature                                  = T
     params.UT                                           = (kB * params.temperature) / q
-    params.chargeNumbers[iphin]                         = -1
+    params.chargeNumbers[iphin]                         =  -1
     params.chargeNumbers[iphip]                         =  1
-    # params.chargeNumbers[iphia]                         =  1
+    # params.chargeNumbers[iphit]                         =  1  # +1: hole trap is used
 
-    ## boundary region data
-    params.bDensityOfStates[iphin, bregionDonor]        = Nc_d
-    params.bDensityOfStates[iphip, bregionDonor]        = Nv_d
+    for ibreg in 1:numberOfBoundaryRegions   # boundary region data
+        params.bDensityOfStates[iphin, ibreg]           = Nc
+        params.bDensityOfStates[iphip, ibreg]           = Nv
+        # params.bDensityOfStates[iphit, ibreg]           = Nt_low
+        # params.bBandEdgeEnergy[iphit, ibreg]            = Et
+    end
 
-    params.bDensityOfStates[iphin, bregionAcceptor]     = Nc_a
-    params.bDensityOfStates[iphip, bregionAcceptor]     = Nv_a
+    params.bBandEdgeEnergy[iphin, bregionAcceptorRight]         = Ec_CIGS
+    params.bBandEdgeEnergy[iphip, bregionAcceptorRight]         = Ev_CIGS
+    params.bBandEdgeEnergy[iphin, bregionAcceptorLeft]      = Ec_CIGS
+    params.bBandEdgeEnergy[iphip, bregionAcceptorLeft]      = Ev_CIGS
 
-    params.bBandEdgeEnergy[iphin, bregionDonor]         = Ec_d
-    params.bBandEdgeEnergy[iphip, bregionDonor]         = Ev_d
+    for ireg in 1:numberOfRegions           # interior region data
 
-    params.bBandEdgeEnergy[iphin, bregionAcceptor]      = Ec_a
-    params.bBandEdgeEnergy[iphip, bregionAcceptor]      = Ev_a
+        params.dielectricConstant[ireg]                 = εr_CIGS       
 
-    for ireg in 1:numberOfRegions # interior region data
-
-        params.dielectricConstant[ireg]                 = ε[ireg]
-
-        ## effective DOS, band edge energy and mobilities
-        params.densityOfStates[iphin, ireg]             = NC[ireg]
-        params.densityOfStates[iphip, ireg]             = NV[ireg]
-        # params.densityOfStates[iphia, ireg]             = NAnion[ireg]
-
-        params.bandEdgeEnergy[iphin, ireg]              = EC[ireg]
-        params.bandEdgeEnergy[iphip, ireg]              = EV[ireg]
-        # params.bandEdgeEnergy[iphia, ireg]              = EA[ireg]
-
-        params.mobility[iphin, ireg]                    = μn[ireg]
-        params.mobility[iphip, ireg]                    = μp[ireg]
-        # params.mobility[iphia, ireg]                    = μa[ireg]
+        ## effective DOS, band-edge energy and mobilities
+        params.densityOfStates[iphin, ireg]             = Nc
+        params.densityOfStates[iphip, ireg]             = Nv
+        params.bandEdgeEnergy[iphin, ireg]              = Ec_CIGS
+        params.bandEdgeEnergy[iphip, ireg]              = Ev_CIGS
+        params.mobility[iphin, ireg]                    = mup_CIGS
+        params.mobility[iphip, ireg]                    = mup_CIGS
 
         ## recombination parameters
-        params.recombinationRadiative[ireg]             = r0[ireg]
-        params.recombinationSRHLifetime[iphin, ireg]    = τn[ireg]
-        params.recombinationSRHLifetime[iphip, ireg]    = τp[ireg]
-        params.recombinationSRHTrapDensity[iphin, ireg] = trap_density!(iphin, ireg, data, EI[ireg])
-        params.recombinationSRHTrapDensity[iphip, ireg] = trap_density!(iphip, ireg, data, EI[ireg])
+        params.recombinationRadiative[ireg]             = Radiative
+        params.recombinationSRHLifetime[iphin, ireg]    = SRH_LifeTime
+        params.recombinationSRHLifetime[iphip, ireg]    = SRH_LifeTime
+        #params.recombinationSRHTrapDensity[iphin, ireg] = n0_CIGS
+        #params.recombinationSRHTrapDensity[iphip, ireg] = p0_CIGS
         params.recombinationAuger[iphin, ireg]          = Auger
         params.recombinationAuger[iphip, ireg]          = Auger
 
+        ## generation parameters
+        params.generationAbsorption[ireg]               = A_CIGS
+        params.generationIncidentPhotonFlux[ireg]       = N0
+        params.generationUniform[ireg]                  = G
+        
     end
 
-    ## interior doping
-    params.doping[iphin, regionDonor]                   = Nd
-    #params.doping[iphia, regionIntrinsic]               = C0
-    params.doping[iphip, regionAcceptor]                = -Na
+    ## overwrite parameters in ZnO donor region
+    #=
+    params.generationUniform[regionAcceptorLeft]                  = 0.0      # only used if for "generation_uniform"
+    params.generationAbsorption[regionAcceptorLeft]               = A_ZnO    # only used if for "generation_beer_lambert"
+    params.generationIncidentPhotonFlux[regionAcceptorLeft]       = N0
+    params.recombinationSRHTrapDensity[iphin, regionAcceptorLeft] = n0_ZnO
+    params.recombinationSRHTrapDensity[iphip, regionAcceptorLeft] = p0_ZnO
+    params.bandEdgeEnergy[iphin, regionAcceptorLeft]              = Ec_ZnO
+    params.bandEdgeEnergy[iphip, regionAcceptorLeft]              = Ev_ZnO
+    params.dielectricConstant[regionAcceptorLeft]                 = εr_ZnO 
+    params.mobility[iphin, regionAcceptorLeft]                    = mun_ZnO
+    params.mobility[iphip, regionAcceptorLeft]                    = mup_ZnO
+    =#
+    ## hole trap density only high in grain
+    # params.densityOfStates[iphit, regionAcceptorLeft]          = Nt_low
+    # params.densityOfStates[iphit, regionAcceptorRight]   = Nt_low
+    # params.densityOfStates[iphit, regionAcceptorTrap]   = Nt
+    # params.densityOfStates[iphit, regionAcceptorRight]  = Nt_low
+
+    ## doping -- since we do not set any doping for the traps it is automatically zero
+    params.doping[iphip, regionAcceptorLeft]             = Na        
+    params.doping[iphip, regionAcceptorRight]            = Na        
 
     ## boundary doping
-    params.bDoping[iphip, bregionAcceptor]              = -Na
-    params.bDoping[iphin, bregionDonor]                 = Nd
+    params.bDoping[iphip, bregionAcceptorRight]          = Na        
+    params.bDoping[iphip, bregionAcceptorLeft]           = Na   
+    
+    ## values for the schottky contacts
+    params.SchottkyBarrier[bregionAcceptorLeft]             = barrier_left
+    params.bVelocity[iphin,bregionAcceptorLeft]             = vn 
+    params.bVelocity[iphip,bregionAcceptorLeft]             = vp 
+
+    #params.SchottkyBarrier[bregionAcceptorRight]                = barrier_right
+    #params.bVelocity[iphin,bregionAcceptorRight]                = vn 
+    #params.bVelocity[iphip,bregionAcceptorRight]                = vp 
 
     data.params                                         = params
     ctsys                                               = System(grid, data, unknown_storage=unknown_storage)
 
-    if test == false
-        show_params(ctsys)
-        println("*** done\n")
-    end
+    show_params(ctsys)
+    println("*** done\n")
 
     ################################################################################
-    if test == false
-        println("Define outer boundary conditions")
-    end
+    println("Define outerior boundary conditions and enabled layers")
     ################################################################################
 
-    ## set zero voltage ohmic contacts for electrons and holes at all outer boundaries.
-    set_contact!(ctsys, bregionAcceptor, Δu = 0.0)
-    set_contact!(ctsys, bregionDonor,    Δu = 0.0)
+    ## set ohmic contact in bregionAcceptorRight and schottky contact in bregionAcceptorLeft
+    #set_schottky_contact!(ctsys, bregionAcceptorRight, appliedVoltage = 0.0)
+    #set_schottky_contact!(ctsys, bregionAcceptorLeft , appliedVoltage = 0.0)
+    #set_ohmic_contact!(ctsys, bregionAcceptorRight   , 0.0)
+    #set_ohmic_contact!(ctsys, bregionAcceptorLeft, 0.0)
+    set_contact!(ctsys, bregionAcceptorRight, Δu = 0.0)
+    set_contact!(ctsys, bregionAcceptorLeft,  Δu = 0.0)
 
-    if test == false
-        println("*** done\n")
-    end
+
+    println("*** done\n")
 
     ################################################################################
-    if test == false
-        println("Define control parameters for Newton solver")
-    end
+    println("Define control parameters for Newton solver")
     ################################################################################
 
     control                   = NewtonControl()
     control.verbose           = verbose
-    control.max_iterations    = 300
-    control.tol_absolute      = 1.0e-10
-    control.tol_relative      = 1.0e-10
-    control.handle_exceptions = true
-    control.tol_round         = 1.0e-10
-    control.max_round         = 5
     control.damp_initial      = 0.5
-    control.damp_growth       = 1.21 # >= 1
+    control.damp_growth       = 1.21    #>= 1
+    control.max_iterations    = 250
+    control.tol_absolute      = 1.0e-14
+    control.tol_relative      = 1.0e-14
+    control.handle_exceptions = true
+    control.tol_round         = 1.0e-8
+    control.max_round         = 5
 
-    if test == false
-        println("*** done\n")
-    end
+    println("*** done\n")
 
     ################################################################################
-    if test == false
-        println("Compute solution in thermodynamic equilibrium for Boltzmann")
-    end
+    println("Compute solution in thermodynamic equilibrium")
     ################################################################################
 
     ## initialize solution and starting vectors
-    initialGuess  = unknowns(ctsys)
-    solution      = unknowns(ctsys)
+    initialGuess          = unknowns(ctsys)
+    equilibriumSolution   = unknowns(ctsys)
+    solution              = unknowns(ctsys)
 
-    solution      = equilibrium_solve!(ctsys, control = control, nonlinear_steps = 20)
+    #data.calculationType = inEquilibrium 
 
-    initialGuess .= solution
+    ## solve thermodynamic equilibrium and update initial guess
+    solution              = equilibrium_solve!(ctsys, control = control, nonlinear_steps = 20)
+    equilibriumSolution  .= solution  
+    initialGuess         .= solution
 
-    if plotting # currently, plotting the solution was only tested with PyPlot.
+
+    println("*** done\n")
+
+
+    if plotting 
+
         ipsi = data.index_psi
         X = grid[Coordinates][1,:]
         Y = grid[Coordinates][2,:]
 
         Plotter.figure()
-        Plotter.surf(X[:], Y[:], solution[ipsi, :])
-        Plotter.title("Electrostatic potential \$ \\psi \$ in Equilibrium")
+        #TO DO: make the labels visible 
+        Plotter.surf(X[:], Y[:], Ev_CIGS*ones(size(solution[ipsi, :]))/q - solution[ipsi, :], label="Ev")
+        Plotter.surf(X[:], Y[:], Ec_CIGS*ones(size(solution[ipsi, :]))/q - solution[ipsi, :], label="Ec")
+        Plotter.surf(X[:], Y[:], -q*solution[iphin, :], label="\$ \\varphi_n \$")
+        Plotter.surf(X[:], Y[:], -q*solution[iphip, :], label="\$ \\varphi_p \$")
+        
+        Plotter.title("Band Edge Energies and qFermi levels in Equilibrium")
         Plotter.xlabel("length [m]")
         Plotter.ylabel("height [m]")
-        Plotter.zlabel("potential [V]")
+        Plotter.zlabel("Energy [eV]")
         Plotter.tight_layout()
-        ################
-        Plotter.figure()
-        Plotter.surf(X[:], Y[:], solution[iphin,:] )
-        Plotter.title("quasi Fermi potential \$ \\varphi_n \$ in Equilibrium")
-        Plotter.xlabel("length [m]")
-        Plotter.ylabel("height [m]")
-        Plotter.zlabel("potential [V]")
-        Plotter.tight_layout()
-    end
 
-    if test == false
-        println("*** done\n")
+        #TO DO: calculate and plot densities!
+        #Attepnts to calculate densities based on function "compute_densities!(u, data, inode, region, icc, in_region::Bool)" in file ct_system.jl from ChargeTransport package
+        # cellnodes      = grid[CellNodes]
+        # (params.densityOfStates[1, :] + data.paramsnodal.densityOfStates[1, :])*data.F[1](etaFunction(solution[iphin, :], data, cellnodes, regions, 1, in_region::Bool))
+
     end
 
     ################################################################################
-    if test == false
-        println("I-V Measurement Loop")
-    end
+    println("Stationary bias loop")
     ################################################################################
+    
+    ## set calculationType to OutOfEquilibrium for starting with respective simulation.
+    data.calculationType = OutOfEquilibrium      # Rn = Rp = R, since the model type is stationary
+    endVoltage           = voltageMin            # final bias value
 
-    data.calculationType = OutOfEquilibrium
+    IV         = zeros(0)   
+    #maxBias    = voltageMin  
+    #maxBias2   = -1*voltageMin   
+    biasSteps  = 101
+    biasValues = collect(range(voltageMin, stop = voltageMax, length = biasSteps))
+    if(!(0.0 in biasValues))
+        append!(biasValues, 0.0)
+        sort!(biasValues)
+    end
+    #print(biasValues)
+    #biasValues2 = collect(range(0, stop= maxBias2, length = biasSteps))
+    chargeDensities = zeros(0)
+    #chargeDensities2 = zeros(0)
+    
 
-    ## primary data for I-V scan protocol
-    scanrate            = 0.04 * V/s
-    number_tsteps       = 16
-    endVoltage          = voltageAcceptor # bias goes until the given voltage at acceptor boundary
-    tend                = endVoltage/scanrate
+    w_device = 1.0    * cm  # width of device
+    z_device = 1.0    * cm  # depth of device
 
-    ## with fixed timestep sizes we can calculate the times a priori
-    tvalues             = range(0, stop = tend, length = number_tsteps)
+    ## adjust Newton parameters
+    control.tol_absolute      = 1.0e-10
+    control.tol_relative      = 1.0e-10
+    control.tol_round         = 1.0e-7
+    control.damp_initial      = 0.5
+    control.damp_growth       = 1.2
+    control.max_iterations    = 30
+    control.max_round         = 3
 
-    ## for saving I-V data
-    IV                  = zeros(0) # for IV values
-    biasValues         = zeros(0) # for bias values
+    
+    indexOfZero = indexin(0.0, biasValues)[1]
+    i = indexOfZero
 
-    for istep = 2:number_tsteps
+    #for i in eachindex(biasValues)
+    while (i>0)
+        Δu = biasValues[i] # bias
 
-        t  = tvalues[istep]       # Actual time
-        Δu = t * scanrate         # Applied voltage
-        Δt = t - tvalues[istep-1] # Time step size
+        ## set non equilibrium boundary condition
+        #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
 
-        ## Apply new voltage; set non equilibrium boundary conditions
-        set_contact!(ctsys, bregionAcceptor, Δu = Δu)
+        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
 
-        if test == false
-            println("time value: t = $(t)")
-        end
+        ## increase generation rate with bias
+        ctsys.data.λ2 = 10.0^(-biasSteps + i)
+        #println("bias: Δu = $(Δu)")
+     
+        ## solve time step problems with timestep Δt
+        solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
 
-        solve!(solution, initialGuess, ctsys, control  = control, tstep = Δt)
+        ## save IV data
+        current = get_current_val(ctsys, solution)
+        push!(IV, w_device * z_device * current)
 
-        ## get I-V data
-        current = get_current_val(ctsys, solution, initialGuess, Δt)
+        ## store CHARGE DENSITY in CIGS
+        #push!(chargeDensities,chargeDensity(ctsys,solution)[regionAcceptorLeft])
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
-        push!(IV, current)
-        push!(biasValues, Δu)
+        #set_contact!(ctsys, bregionAcceptorRight, Δu = jezuchryste)
+        #push!(chargeDensities2,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
         initialGuess .= solution
-    end # time loop
+        i=i-1
+    end # bias loop 1
 
+    reverse!(IV)
+    reverse!(chargeDensities)
+
+    #plot energies and qFermi levels for voltageMin
     if plotting
+        ipsi = data.index_psi
+        X = grid[Coordinates][1,:]
+        Y = grid[Coordinates][2,:]
+
         Plotter.figure()
-        Plotter.surf(X[:], Y[:], solution[ipsi, :])
-        Plotter.title("Electrostatic potential \$ \\psi \$ at end time")
+        #TO DO: make the labels visible 
+        Plotter.surf(X[:], Y[:], Ev_CIGS*ones(size(solution[ipsi, :]))/q - solution[ipsi, :], label="Ev")
+        Plotter.surf(X[:], Y[:], Ec_CIGS*ones(size(solution[ipsi, :]))/q - solution[ipsi, :], label="Ec")
+        Plotter.surf(X[:], Y[:], -solution[iphin, :], label="\$ \\varphi_n \$")
+        Plotter.surf(X[:], Y[:], -solution[iphip, :], label="\$ \\varphi_p \$")
+        
+        Plotter.title("Band Edge Energies and qFermi levels at \$ $(voltageMin) \$V")
         Plotter.xlabel("length [m]")
         Plotter.ylabel("height [m]")
-        Plotter.zlabel("potential [V]")
-        ## ################
-        Plotter.figure()
-        Plotter.surf(X[:], Y[:], solution[iphin,:] )
-        Plotter.title("quasi Fermi potential \$ \\varphi_n \$ at end time")
-        Plotter.xlabel("length [m]")
-        Plotter.ylabel("height [m]")
-        Plotter.zlabel("potential [V]")
-        ## ################
-        Plotter.figure()
-        Plotter.plot(biasValues, IV.*(cm)^2/height,  linewidth= 3, linestyle="--", color="red")
-        Plotter.title("Forward")
-        Plotter.ylabel("total current [A]") #
-        Plotter.xlabel("Applied Voltage [V]")
+        Plotter.zlabel("Energy [eV]")
+        Plotter.tight_layout() 
+               
     end
+    
+    i = indexOfZero+1
+    initialGuess .= equilibriumSolution
 
-    if test == false
-        println("*** done\n")
+    while (i<=length(biasValues))
+        Δu = biasValues[i] # bias
+
+        ## set non equilibrium boundary condition
+        #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
+        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
+    
+        ## solve time step problems with timestep Δt
+        solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
+
+        ## save IV data
+        current = get_current_val(ctsys, solution)
+        push!(IV, w_device * z_device * current)
+
+        ## store uncompensated CHARGE DENSITY in CIGS
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
+
+        initialGuess .= solution
+        i=i+1
+    end # bias loop 2
+
+   
+
+    println("*** done\n")
+
+    ## compute static capacitance: check this is correctly computed
+
+    staticCapacitance = diff(chargeDensities) ./ diff(biasValues)
+    writedlm( "staticCapacitance.csv",  staticCapacitance, ',')
+    writedlm( "chargeDensities.csv"  ,  chargeDensities  , ',')
+    writedlm( "biasValues.csv"       ,  biasValues       , ',')
+
+    ## plot solution at voltageMax, IV, QV and CV curves
+    if plotting
+        # plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
+        # Plotter.figure()
+        # plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_density)
+        # Plotter.figure()
+#        plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
+        Plotter.figure()
+        plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
+        Plotter.figure()
+        plot_IV(Plotter, biasValues,chargeDensities, biasValues[end], plotGridpoints = true)
+        Plotter.title("Charge density in donor region")
+        Plotter.ylabel("Charge density [C]")
+        Plotter.figure()
+        plot_IV(Plotter, biasValues,abs.(staticCapacitance), biasValues[end-1], plotGridpoints = true)
+        Plotter.title("Static capacitance in donor region")
+        Plotter.ylabel("Static capacitance [F]")
+               
     end
-
-    testval = 666#solution[4, 42]
+ 
+    testval = solution[data.index_psi, 10]
     return testval
+
+    println("*** done\n")
 
 end #  main
 
 function test()
-    testval = -4.067616138729543
-    main(test = true, unknown_storage=:dense) ≈ testval #&& main(test = true, unknown_storage=:sparse) ≈ testval
+    testval = 1.3214196490674017
+    main(test = true, unknown_storage=:dense) ≈ testval && main(test = true, unknown_storage=:sparse) ≈ testval
 end
 
-if test == false
-    println("This message should show when this module is successfully recompiled.")
-end
+println("This message should show when this module has successfully recompiled.")
+
 
 end # module
+
+
+

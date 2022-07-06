@@ -330,8 +330,8 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         Plotter.figure()
         plot_densities(Plotter, grid, data, solution,"Equilibrium", label_density)
         Plotter.figure()
-#        plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
-#        Plotter.figure()
+        plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
+        Plotter.figure()
     end
 
     ################################################################################
@@ -408,6 +408,13 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     reverse!(IV)
     reverse!(chargeDensities)
+
+    ## plot energies and qFermi levels for voltageMin
+    if plotting 
+        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
+        Plotter.figure()
+                
+    end
     
     i = indexOfZero+1
     initialGuess .= equilibriumSolution
@@ -446,12 +453,12 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     ## plot solution and IV curve
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
-        Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_density)
-        Plotter.figure()
-#        plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
-#        Plotter.figure()
+        # plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
+        # Plotter.figure()
+        # plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_density)
+        # Plotter.figure()
+        # plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
+        # Plotter.figure()
         plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
         Plotter.figure()
         plot_IV(Plotter, biasValues,chargeDensities, biasValues[end], plotGridpoints = true)
