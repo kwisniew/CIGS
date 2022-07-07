@@ -28,15 +28,14 @@ biasValues               = CSV.read(filepath2 , DataFrame; header=false)
 y    = abs.(staticCapacitance.Column1).^-2
 #The capacitance is calculated by numerical differentiation of the uncompensated charge density with respect to voltage C(V)=dQ(V)/dV. 
 #One can argue that C calculated this way should be evaluated not in V, but V+dV/2: C(V+dV/2)= dQ(V)/dV
-#ASSUMPTION!: values in vector "biasValues" are equally spaced and this vector start from 0 (biasValues.Column1[0]=0)
 bias = biasValues.Column1[1:(length(biasValues.Column1)-1)] .+ diff(biasValues.Column1/2)
 #make sure that X and Y have the same length 
 bias = bias[1:length(y)]
 #bias = abs.(bias)
 
 #The last few values of C deviates from other, so we artificially cut of the last five of it
-cutoff = 5
-#TO DO: 1) Check what cause the deviation - this is potential bug. 
+cutoff = 0
+#TO DO: Check what cause the deviation - this is potential bug. 
 data = DataFrame(X=bias[1:(length(bias)-cutoff)],Y=y[1:(length(y)-cutoff)])
 
 #linear fit

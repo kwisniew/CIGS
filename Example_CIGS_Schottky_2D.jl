@@ -81,7 +81,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     if plotting
         gridplot(grid, Plotter = Plotter, legend=:lt)
         Plotter.title("Grid")
-        Plotter.figure()
+        
     end
 
     println("*** done\n")
@@ -331,10 +331,11 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         X = grid[Coordinates][1,:]
         Y = grid[Coordinates][2,:]
 
+        #Plot energies
         Plotter.figure()
         #TO DO: make the labels visible 
-        Plotter.surf(X[:], Y[:], Ev_CIGS*ones(size(solution[ipsi, :]))/q - solution[ipsi, :], label="Ev")
-        Plotter.surf(X[:], Y[:], Ec_CIGS*ones(size(solution[ipsi, :]))/q - solution[ipsi, :], label="Ec")
+        Plotter.surf(X[:], Y[:], Ev_CIGS/q .- solution[ipsi, :], label="Ev")
+        Plotter.surf(X[:], Y[:], Ec_CIGS/q .- solution[ipsi, :], label="Ec")
         Plotter.surf(X[:], Y[:], -q*solution[iphin, :], label="\$ \\varphi_n \$")
         Plotter.surf(X[:], Y[:], -q*solution[iphip, :], label="\$ \\varphi_p \$")
         
@@ -344,10 +345,18 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         Plotter.zlabel("Energy [eV]")
         Plotter.tight_layout()
 
-        #TO DO: calculate and plot densities!
-        #Attepnts to calculate densities based on function "compute_densities!(u, data, inode, region, icc, in_region::Bool)" in file ct_system.jl from ChargeTransport package
-        # cellnodes      = grid[CellNodes]
-        # (params.densityOfStates[1, :] + data.paramsnodal.densityOfStates[1, :])*data.F[1](etaFunction(solution[iphin, :], data, cellnodes, regions, 1, in_region::Bool))
+        # Plot densities
+        Plotter.figure()
+        #TO DO: make the labels visible 
+        Plotter.surf(X[:], Y[:], log10.(1.0e-6 .*Nc.*exp.((-(Ec_CIGS/q .- solution[ipsi, :])-solution[iphin, :])/(params.UT)))) #electron density
+        Plotter.surf(X[:], Y[:], log10.(1.0e-6 .*Nv.*exp.(( (Ev_CIGS/q .- solution[ipsi, :])+solution[iphip, :])/(params.UT)))) #hole density
+        
+        Plotter.title("electrons and holes densities")
+        Plotter.xlabel("length [m]")
+        Plotter.ylabel("height [m]")
+        Plotter.zlabel("Densities [log(cm-3)]")
+        Plotter.tight_layout()
+
 
     end
 
@@ -432,8 +441,8 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
         Plotter.figure()
         #TO DO: make the labels visible 
-        Plotter.surf(X[:], Y[:], Ev_CIGS*ones(size(solution[ipsi, :]))/q - solution[ipsi, :], label="Ev")
-        Plotter.surf(X[:], Y[:], Ec_CIGS*ones(size(solution[ipsi, :]))/q - solution[ipsi, :], label="Ec")
+        Plotter.surf(X[:], Y[:], Ev_CIGS/q .- solution[ipsi, :], label="Ev")
+        Plotter.surf(X[:], Y[:], Ec_CIGS/q .- solution[ipsi, :], label="Ec")
         Plotter.surf(X[:], Y[:], -solution[iphin, :], label="\$ \\varphi_n \$")
         Plotter.surf(X[:], Y[:], -solution[iphip, :], label="\$ \\varphi_p \$")
         
@@ -482,11 +491,38 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     ## plot solution at voltageMax, IV, QV and CV curves
     if plotting
-        # plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
-        # Plotter.figure()
-        # plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_density)
-        # Plotter.figure()
-#        plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
+
+        ipsi = data.index_psi
+        X = grid[Coordinates][1,:]
+        Y = grid[Coordinates][2,:]
+
+        #Plot energies
+        Plotter.figure()
+        #TO DO: make the labels visible 
+        Plotter.surf(X[:], Y[:], Ev_CIGS/q .- solution[ipsi, :], label="Ev")
+        Plotter.surf(X[:], Y[:], Ec_CIGS/q .- solution[ipsi, :], label="Ec")
+        Plotter.surf(X[:], Y[:], -solution[iphin, :], label="\$ \\varphi_n \$")
+        Plotter.surf(X[:], Y[:], -solution[iphip, :], label="\$ \\varphi_p \$")
+        
+        Plotter.title("Band Edge Energies and qFermi levels at \$ $(voltageMax) \$V")
+        Plotter.xlabel("length [m]")
+        Plotter.ylabel("height [m]")
+        Plotter.zlabel("Energy [eV]")
+        Plotter.tight_layout()
+
+        #Plot densities
+        Plotter.figure()
+        #TO DO: make the labels visible 
+        Plotter.surf(X[:], Y[:], log10.(1.0e-6 .*Nc.*exp.((-(Ec_CIGS/q .- solution[ipsi, :])-solution[iphin, :])/(params.UT)))) # electron density
+        Plotter.surf(X[:], Y[:], log10.(1.0e-6 .*Nv.*exp.(( (Ev_CIGS/q .- solution[ipsi, :])+solution[iphip, :])/(params.UT)))) #hole density
+        
+        Plotter.title("electrons and holes densities at \$ $(voltageMax) \$V")
+        Plotter.xlabel("length [m]")
+        Plotter.ylabel("height [m]")
+        Plotter.zlabel("Densities [log(cm-3)]")
+        Plotter.tight_layout()
+
+        #Plot IV, QV and CV
         Plotter.figure()
         plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
         Plotter.figure()

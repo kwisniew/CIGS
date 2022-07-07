@@ -60,9 +60,9 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
 
     if plotting
+        Plotter.figure()
         gridplot(grid, Plotter = Plotter, legend=:lt)
         Plotter.title("Grid")
-        Plotter.figure()
     end
 
     println("*** done\n")
@@ -326,12 +326,13 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         # label_energy[1, iphit] = "\$E_{\\tau}-q\\psi\$"; label_energy[2, iphit] = "\$ - q \\varphi_{\\tau}\$"
         # label_density[iphit]   = "\$n_{\\tau}\$";        label_solution[iphit]  = "\$ \\varphi_{\\tau}\$"
         ## ##### set legend for plotting routines #####
+        Plotter.figure()
         plot_energies(Plotter, grid, data, solution, "Equilibrium", label_energy)
         Plotter.figure()
         plot_densities(Plotter, grid, data, solution,"Equilibrium", label_density)
-        Plotter.figure()
-        plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
-        Plotter.figure()
+
+        # plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
+        # Plotter.figure()
     end
 
     ################################################################################
@@ -453,10 +454,10 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     ## plot solution and IV curve
     if plotting 
-        # plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
-        # Plotter.figure()
-        # plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_density)
-        # Plotter.figure()
+        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_energy)
+        Plotter.figure()
+        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
+        Plotter.figure()
         # plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
         # Plotter.figure()
         plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
