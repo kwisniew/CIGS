@@ -70,7 +70,7 @@ function cal_doping_and_build_in_pot()
    #ASSUMPTION: width and depth = 1cm. Check if this parameters are the same as in the script you use to get "biasValues" and "staticCapacitance"!
    #TO DO: read  width and depth from the file.
    w_device = 1.0 *u"cm"  # width of device
-   z_device = 1.0 *u"cm"  # depth of device
+   z_device = 1.0 *u"μm"#cm"  # depth of device
    S        = w_device*z_device #1cm2
    q          = 1.602176565*10^-19 * u"C"
    N_derived = 2/(slope*q*epsRelativ*eps0*S^2)

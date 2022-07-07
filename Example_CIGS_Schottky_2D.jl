@@ -366,25 +366,20 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     
     ## set calculationType to OutOfEquilibrium for starting with respective simulation.
     data.calculationType = OutOfEquilibrium      # Rn = Rp = R, since the model type is stationary
-    endVoltage           = voltageMin            # final bias value
 
     IV         = zeros(0)   
-    #maxBias    = voltageMin  
-    #maxBias2   = -1*voltageMin   
     biasSteps  = 101
     biasValues = collect(range(voltageMin, stop = voltageMax, length = biasSteps))
     if(!(0.0 in biasValues))
         append!(biasValues, 0.0)
         sort!(biasValues)
     end
-    #print(biasValues)
-    #biasValues2 = collect(range(0, stop= maxBias2, length = biasSteps))
+
     chargeDensities = zeros(0)
-    #chargeDensities2 = zeros(0)
     
 
     w_device = 1.0    * cm  # width of device
-    z_device = 1.0    * cm  # depth of device
+    z_device = 1.0#    * cm  # depth of device
 
     ## adjust Newton parameters
     control.tol_absolute      = 1.0e-10
