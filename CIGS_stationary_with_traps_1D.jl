@@ -147,7 +147,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     Na                = 5.0e15 / (cm^3)
 
     ## we will impose this applied voltage on one boundary
-    voltageAcceptor   = 1.0 * V
+    voltageAcceptor   = 0.1 * V
 
     if test == false
         println("*** done\n")

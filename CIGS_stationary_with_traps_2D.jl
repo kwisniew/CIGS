@@ -15,23 +15,6 @@ using PyPlot
 using SimplexGridFactory
 using Triangulate
 
-## function to initialize the grid for a possble extension to other p-i-n devices.
-function initialize_pin_grid(refinementfactor, h_ndoping, h_pdoping_left, h_pdoping_trap, h_pdoing_right)
-    coord_ndoping    = collect(range(0.0, stop = h_ndoping, length = 2 * refinementfactor))
-    coord_pdoping_left  = collect(range(h_ndoping, stop = (h_ndoping + h_pdoping_left), length = 3 * refinementfactor))
-    coord_pdoping_plus  = collect(range((h_ndoping + h_pdoping_left),
-                                        stop = (h_ndoping + h_pdoping_left + h_pdoping_trap),
-                                        length =  refinementfactor))
-    coord_pdoping_right = collect(range((h_ndoping + h_pdoping_left + h_pdoping_trap),
-                                        stop = (h_ndoping + h_pdoping_left + h_pdoping_trap + h_pdoing_right),
-                                        length = 3 * refinementfactor))
-    coord            = glue(coord_ndoping, coord_pdoping_left)
-    coord            = glue(coord, coord_pdoping_plus)
-    coord            = glue(coord, coord_pdoping_right)
-
-    return coord
-end
-
 function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
 
     ################################################################################
@@ -93,7 +76,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     facetregion!(b, bregionNoFlux)
     facet!(b, height_0, height_L)
 
-    #  ## inner interface
+    ## inner interface
     facetregion!(b, bregionInner)
     facet!(b, length_ZnO, height_ZnO)
     facetregion!(b, bregionInner)
@@ -155,7 +138,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     Nc                = 4.351959895879690e17 / (cm^3)
     Nv                = 9.139615903601645e18 / (cm^3)
-    Nt                = 1e18                 / (cm^3)
+    Nt                = 1e12                 / (cm^3)
     #Nt_low            = Nt#/1e3
     mun_CIGS          = 100.0                * (cm^2) / (V * s)
     mup_CIGS          = 25                   * (cm^2) / (V * s)
