@@ -381,13 +381,10 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
         ## set non equilibrium boundary condition
         #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
-
         set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
 
         ## increase generation rate with bias
         ctsys.data.λ2 = 10.0^(-biasSteps + i)
-        #println("bias: Δu = $(Δu)")
-        #println("bias2: -Δu = $(jezuchryste)")
      
         ## solve time step problems with timestep Δt
         solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
@@ -399,9 +396,6 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         ## store CHARGE DENSITY in CIGS
         #push!(chargeDensities,chargeDensity(ctsys,solution)[regionAcceptorLeft])
         push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
-
-        #set_contact!(ctsys, bregionAcceptorRight, Δu = jezuchryste)
-        #push!(chargeDensities2,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
         initialGuess .= solution
         i=i-1

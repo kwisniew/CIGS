@@ -1,5 +1,5 @@
 #File to extract doping and build in potential from capacitance - voltage relationship
-#and it is also used for postprocessing of data (plotting tests)
+#it is also used for postprocessing of data (plotting)
 
 #declaration of modules
 using CSV 
@@ -9,6 +9,7 @@ using Plots
 using GLM
 using Polynomials
 using Unitful
+using NumericIO
 
 
 #declaration of arrays and reading data form files
@@ -20,7 +21,6 @@ filename2 = "biasValues.csv"
 filepath2 = joinpath(@__DIR__, filename2)
 staticCapacitance        = CSV.read(filepath  , DataFrame; header=false) 
 biasValues               = CSV.read(filepath2 , DataFrame; header=false) 
-#popfirst!(biasValues.Column1)
 
 #One can get from capacitance-voltage (CV) relationship the values of "build in potential" and "doping density"
 #For details see eq. 3.10 in https://in.ncu.edu.tw/ncume_ee/SchottkyDiode.htm  
@@ -75,8 +75,9 @@ function cal_doping_and_build_in_pot()
    q          = 1.602176565*10^-19 * u"C"
    N_derived = 2/(slope*q*epsRelativ*eps0*S^2)
    build_in_potential = intercept/slope
-   return upreferred(N_derived), build_in_potential
+   return formatted(ustrip(u"cm^-3",(-N_derived)), :SCI, ndigits=3)*" cm^-3", round(typeof(1.0u"V"),-build_in_potential;digits=2)
 end
+#upreferred(N_derived)
 #test function for printing values
 function print_linear_fit_coefs() 
    printer = coef(ols)
