@@ -1,3 +1,4 @@
 biasValues.csv
 chargeDensities.csv
 staticCapacitance.csv
+test_grid.jl
