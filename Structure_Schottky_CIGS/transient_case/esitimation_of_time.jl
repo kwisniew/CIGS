@@ -4,7 +4,7 @@ using Unitful
 mup_CIGS = 25* u"(cm^2) / (V * s)"
 Na       = 1.0e15 *u"1/(cm^3)"
 
-#estimation of depleteion region (you can read it from plot od energy band in equilibrium)
+#estimation of depletion region (you can read it from plot od energy band in equilibrium)
 W = 0.75 * u"μm"
 
 w_device = 1.0 *u"cm"  # width of device
