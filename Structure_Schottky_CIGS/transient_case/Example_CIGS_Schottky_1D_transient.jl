@@ -112,8 +112,8 @@ function main(;n = 3, voltageStep=-0.5, Plotter = PyPlot, plotting = false, verb
     ## initialize Data instance and fill in data
     data                                = Data(grid, numberOfCarriers)
 
-    ## possible choices: model_stationary, model_transient
-    data.modelType                      = Stationary
+    ## Possible choices: Stationary, Transient
+    data.modelType                     = Transient
 
     ## possible choices: Boltzmann, FermiDiracOneHalfBednarczyk, FermiDiracOneHalfTeSCA FermiDiracMinusOne, Blakemore
     data.F                             .= [FermiDiracOneHalfTeSCA, FermiDiracOneHalfTeSCA]
@@ -351,13 +351,13 @@ function main(;n = 3, voltageStep=-0.5, Plotter = PyPlot, plotting = false, verb
         Plotter.figure()
         plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
         Plotter.figure()
-        plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
+        plot_IV(Plotter, biasValues,IV, tvalues[end], plotGridpoints = true)
         Plotter.figure()
-        plot_IV(Plotter, biasValues,chargeDensities, biasValues[end], plotGridpoints = true)
+        plot_IV(Plotter, tvalues,chargeDensities, tvalues[end], plotGridpoints = true)
         Plotter.title("Charge density in donor region")
         Plotter.ylabel("Charge density [C]")
         Plotter.figure()
-        plot_IV(Plotter, biasValues,abs.(staticCapacitance), biasValues[end-1], plotGridpoints = true)
+        plot_IV(Plotter, tvalues,abs.(staticCapacitance), tvalues[end-1], plotGridpoints = true)
         Plotter.title("Static capacitance in donor region")
         Plotter.ylabel("Static capacitance [F]")
                
