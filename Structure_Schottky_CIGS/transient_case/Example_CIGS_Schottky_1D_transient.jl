@@ -278,8 +278,55 @@ function main(;n = 3, voltageStep=-0.5, Plotter = PyPlot, plotting = false, verb
         plot_densities(Plotter, grid, data, solution,"Equilibrium", label_density)
     end
 
+##########DILARA##########################
+
     ################################################################################
-    println("Stationary bias loop")
+    println("Stationary loop to increase bias")
+    ################################################################################
+    
+    ## set calculationType to OutOfEquilibrium for starting with respective simulation.
+    data.calculationType = OutOfEquilibrium   # Rn = Rp = R, since the model type is stationary
+    biasValues           = range(0.0, stop = voltageStep, length = 11)
+
+    ## increase slowly the bias in stationary calculations
+
+    for Δu in biasValues
+
+        ## Apply new voltage: set non equilibrium boundary conditions
+        set_contact!(ctsys, bregionAcceptorLeft, Δu = Δu)
+
+        if test == false
+            println("bias value: Δu = $(Δu)")
+        end
+
+        # the Inf as tstep corresponds to stationary calculations.
+        solve!(solution, initialGuess, ctsys, control  = control, tstep = 1e-12)
+
+
+        PyPlot.clf()
+        plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
+        PyPlot.pause(0.5)
+
+        initialGuess .= solution
+
+    end # bias values
+ ################################################################################
+
+
+
+
+
+
+
+
+
+##########################################
+
+
+
+
+    ################################################################################
+    println("Transient bias loop")
     ################################################################################
     
     ## set calculationType to OutOfEquilibrium for starting with respective simulation.
@@ -287,7 +334,7 @@ function main(;n = 3, voltageStep=-0.5, Plotter = PyPlot, plotting = false, verb
     Voltage_step         = voltageStep            # final bias value
 
     ## Scan rate and time steps
-    number_tsteps        = 25
+    number_tsteps        = 50
     tend                 = 1e-9
     tvalues              = range(0.0, stop = tend, length = number_tsteps)
     Δt                   = tvalues[2] - tvalues[1]
@@ -320,7 +367,7 @@ function main(;n = 3, voltageStep=-0.5, Plotter = PyPlot, plotting = false, verb
         Δt = t - tvalues[istep-1]    # Time step size
 
         ## Apply new voltage: set non equilibrium boundary conditions
-        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
+        set_contact!(ctsys, bregionAcceptorLeft, Δu = Δu)
 
         if test == false
             println("time value: t = $(t)")
@@ -340,26 +387,26 @@ function main(;n = 3, voltageStep=-0.5, Plotter = PyPlot, plotting = false, verb
        println("*** done\n")
 
     ## compute static capacitance: check this is correctly computed
-    staticCapacitance = diff(chargeDensities) ./ diff(biasValues)
-    writedlm( "staticCapacitance.csv",  staticCapacitance, ',')
+    # staticCapacitance = diff(chargeDensities) ./ diff(biasValues)
+    # writedlm( "staticCapacitance.csv",  staticCapacitance, ',')
     writedlm( "chargeDensities.csv"  ,  chargeDensities  , ',')
     writedlm( "biasValues.csv"       ,  biasValues       , ',')
 
     ## plot solution and IV curve
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_energy)
+        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
+        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_density)
         Plotter.figure()
-        plot_IV(Plotter, biasValues,IV, tvalues[end], plotGridpoints = true)
+        plot_IV(Plotter, tvalues,IV, tvalues[end], plotGridpoints = true)
         Plotter.figure()
         plot_IV(Plotter, tvalues,chargeDensities, tvalues[end], plotGridpoints = true)
-        Plotter.title("Charge density in donor region")
+        Plotter.title("Uncompensated charge density")
         Plotter.ylabel("Charge density [C]")
-        Plotter.figure()
-        plot_IV(Plotter, tvalues,abs.(staticCapacitance), tvalues[end-1], plotGridpoints = true)
-        Plotter.title("Static capacitance in donor region")
-        Plotter.ylabel("Static capacitance [F]")
+        # Plotter.figure()
+        # plot_IV(Plotter, tvalues,abs.(staticCapacitance), tvalues[end-1], plotGridpoints = true)
+        # Plotter.title("Static capacitance in donor region")
+        # Plotter.ylabel("Static capacitance [F]")
                
     end
  
