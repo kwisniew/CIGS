@@ -1,3 +1,6 @@
+# See https://wias-berlin.github.io/PDELib.jl/dev/intro/#Grid-generation-and-visualization for more details and examples
+
+
 using ChargeTransport
 using ExtendableGrids
 using GridVisualize
