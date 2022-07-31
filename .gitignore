@@ -2,3 +2,4 @@ biasValues.csv
 chargeDensities.csv
 staticCapacitance.csv
 test_grid.jl
+Structure_Schottky_CIGS/transient_case/2_Schottky/solution.jld2
