@@ -12,8 +12,9 @@ z_device = 1.0 *u"cm"  # depth of device
 S        = w_device*z_device #1cm2
 
 Q = 1.602176565*10^-19 * u"C"
+#Resistivity
 ρ = 1/(Q*Na*mup_CIGS)
-
+#Resistance (from Pouillet's law)
 R= ρ * W / S
 
 #I'm approximating the value of C from the CV plot: C was taken for V=0

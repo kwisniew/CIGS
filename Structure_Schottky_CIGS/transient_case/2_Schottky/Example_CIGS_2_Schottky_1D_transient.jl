@@ -3,7 +3,7 @@
 Simulating stationary charge transport in a pn junction with hole traps and a Schottky boundary condition.
 =#
 
-module Example_CIGS_Schottky_1D_transient
+module Example_CIGS_2_Schottky_1D_transient
 
 using VoronoiFVM
 using ChargeTransport
@@ -11,6 +11,7 @@ using ExtendableGrids
 using GridVisualize
 using PyPlot
 using DelimitedFiles
+using FileIO, JLD2
 
 ## function to initialize the grid for a possible extension to other p-i-n devices.
 function initialize_pin_grid(refinementfactor, h_pdoping, h_pdoping_right)
@@ -42,7 +43,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
     ## grid
     refinementfactor        = 2^(n-1)
-    h_pdoping          = 2 * μm
+    h_pdoping          = 2.5 * μm
 
     coord                   = initialize_pin_grid(refinementfactor,
                                                   h_pdoping/2,
@@ -87,7 +88,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
-    # barrier_right     = Ev_CIGS + 0.4 * eV
+    barrier_right     = Ev_CIGS + 0.4 * eV
     barrier_left      = Ev_CIGS + 1.0 * eV
 
     ## recombination parameters
@@ -133,7 +134,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     ## Possible choices: OhmicContact, SchottkyContact (outer boundary) and InterfaceModelNone,
     ## InterfaceModelSurfaceReco (inner boundary).
     data.boundaryType[bregionAcceptorLeft ]    = SchottkyContact                       
-    data.boundaryType[bregionAcceptorRight]    = OhmicContact   
+    data.boundaryType[bregionAcceptorRight]    = SchottkyContact#OhmicContact   
     
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
@@ -201,6 +202,11 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     params.SchottkyBarrier[bregionAcceptorLeft]             = barrier_left
     params.bVelocity[iphin,bregionAcceptorLeft]             = vn 
     params.bVelocity[iphip,bregionAcceptorLeft]             = vp 
+
+    params.SchottkyBarrier[bregionAcceptorRight]                = barrier_right
+    params.bVelocity[iphin,bregionAcceptorRight]                = vn 
+    params.bVelocity[iphip,bregionAcceptorRight]                = vp 
+
 
     data.params                                         = params
     ctsys                                               = System(grid, data, unknown_storage=unknown_storage)
@@ -320,10 +326,10 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     Voltage_step         = voltageStep            # final bias value
 
     ## Scan rate and time steps
-    number_tsteps        = 50
-    tend                 = 1e-9
+    number_tsteps        = 500
+    tend                 = 1e-8
     tvalues              = range(0.0, stop = tend, length = number_tsteps)
-    Δt                   = tvalues[2] - tvalues[1]
+    # Δt                   = tvalues[2] - tvalues[1]
 
     IV         = zeros(0)     
     chargeDensities = zeros(0)
@@ -395,6 +401,60 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         # plot_IV(Plotter, tvalues,abs.(staticCapacitance), tvalues[end-1], plotGridpoints = true)
         # Plotter.title("Static capacitance in donor region")
         # Plotter.ylabel("Static capacitance [F]")
+               
+    end
+
+
+    ################################################################################
+    println("Changing time step")
+    ################################################################################    
+    ## Scan rate and time steps
+    number_tsteps             = 500
+    tend_slow                 = 0.2e-6
+    tvalues_slow              = range(tvalues[end], stop = tend_slow, length = number_tsteps)
+
+    for istep = 2:number_tsteps
+
+        t  = tvalues_slow[istep]          # Actual time
+        Δu = Voltage_step           # Applied voltage
+        Δt = t - tvalues_slow[istep-1]    # Time step size
+
+        ## Apply new voltage: set non equilibrium boundary conditions
+        set_contact!(ctsys, bregionAcceptorLeft, Δu = Δu)
+
+        if test == false
+            println("time value: t = $(t)")
+        end
+
+        solve!(solution, initialGuess, ctsys, control  = control, tstep = Δt)
+
+        ## get I-V data
+        current = get_current_val(ctsys, solution, initialGuess, Δt)
+        push!(IV, w_device * z_device * current)
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptor]))
+
+        initialGuess .= solution
+
+    end # bias loop
+
+    println("*** done\n")
+    FileIO.save("solution.jld2","solution",solution)
+    tvalues_all = [tvalues' tvalues_slow']
+
+    ## plot solution and IV curve
+    if plotting 
+        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(Voltage_step), \$ t=$(tend_slow)\$", label_energy)
+        Plotter.figure()
+        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(Voltage_step), \$ t=$(tend_slow)\$", label_density)
+        Plotter.figure()
+        plot_IV(Plotter, tvalues_all,IV, "\$ t_{end}=$(tvalues_all[end])s\$", plotGridpoints = true)
+        Plotter.ylabel("total current[A]")
+        Plotter.xlabel("t[s]")
+        Plotter.figure()
+        plot_IV(Plotter, tvalues_all,chargeDensities, tvalues_all[end], plotGridpoints = true)
+        Plotter.title("Uncompensated charge density \$ t_{end}=$(tvalues_all[end])s\$")
+        Plotter.ylabel("Charge density [C]")
+        Plotter.xlabel("t[s]")
                
     end
 

@@ -3,7 +3,7 @@
 Simulating stationary charge transport in a pn junction with hole traps and a Schottky boundary condition.
 =#
 
-module Example_CIGS_Schottky_1D_transient
+module Example_CIGS_2_Schottky_1D
 
 using VoronoiFVM
 using ChargeTransport
@@ -11,27 +11,28 @@ using ExtendableGrids
 using GridVisualize
 using PyPlot
 using DelimitedFiles
+using FileIO, JLD2
 
 ## function to initialize the grid for a possible extension to other p-i-n devices.
-function initialize_pin_grid(refinementfactor, h_pdoping, h_pdoping_right)
-    coord_pdoping_left    = collect(range(0.0, stop = h_pdoping, length = 3 * refinementfactor))
-    coord_pdoping_right  = collect(range(h_pdoping, stop = (h_pdoping + h_pdoping_right), length = 3 * refinementfactor))
+function initialize_pin_grid(refinementfactor, h_pdoping_left, h_pdoping_right)
+    coord_pdoping_left    = collect(range(0.0, stop = h_pdoping_left, length = 3 * refinementfactor))
+    coord_pdoping_right  = collect(range(h_pdoping_left, stop = (h_pdoping_left + h_pdoping_right), length = 3 * refinementfactor))
                                  
     coord            = glue(coord_pdoping_left, coord_pdoping_right)
 
     return coord
 end
 
-#In this script voltage is applied to the left side of the domain, what means that "+" means reverse voltage, and "-" means forward voltage
-function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
+function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
 
     ################################################################################
     println("Set up grid and regions")
     ################################################################################
 
     ## region numbers
-    regionAcceptor      = 1  # p doped region
-    regions             = [regionAcceptor]
+    regionAcceptorLeft  = 1                           # n doped region
+    regionAcceptorRight = 2                           # p doped region
+    regions             = [regionAcceptorLeft, regionAcceptorRight]
     numberOfRegions     = length(regions)
 
     ## boundary region numbers
@@ -42,18 +43,21 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
     ## grid
     refinementfactor        = 2^(n-1)
-    h_pdoping          = 2 * μm
+    #h_pdoping_left               = 0.5 * μm
+    h_pdoping_left          = 1.25 * μm
 
     coord                   = initialize_pin_grid(refinementfactor,
-                                                  h_pdoping/2,
-                                                  h_pdoping/2,
+                                                  h_pdoping_left,
+                                                  h_pdoping_left,
                                                  )
 
     grid                    = simplexgrid(coord)
 
     ## set different regions in grid, doping profiles do not intersect
+    ## n doped 
+    cellmask!(grid, [0.0 * μm], [h_pdoping_left], regionAcceptorLeft)          
     ## p doped                    
-    cellmask!(grid, [0.0 * μm], [h_pdoping], regionAcceptor)    
+    cellmask!(grid, [h_pdoping_left], [h_pdoping_left + h_pdoping_left], regionAcceptorRight)    
 
 
     if plotting
@@ -77,33 +81,48 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
     Nc                = 4.351959895879690e17 / (cm^3)
     Nv                = 9.139615903601645e18 / (cm^3)
-    Nt                = 5e14                 / (cm^3)
+    Nt                = 5e14                / (cm^3)   
+    Nt_low            = Nt#/1e3                        
     mun_CIGS          = 100.0                * (cm^2) / (V * s)
     mup_CIGS          = 25                   * (cm^2) / (V * s)
-    εr_CIGS           = 13.6                 *  1.0               
+    mun_ZnO           = 100                  * (cm^2) / (V * s)
+    mup_ZnO           = 25                   * (cm^2) / (V * s)
+    mut               = 0                    * (cm^2) / (V * s)  # no flux for traps
+    εr_CIGS           = 13.6                 *  1.0              
+    εr_ZnO            = 9                    *  1.0                
     T                 = 300.0                *  K
 
     An                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
-    # barrier_right     = Ev_CIGS + 0.4 * eV
+    barrier_right     = Ev_CIGS + 0.4 * eV
     barrier_left      = Ev_CIGS + 1.0 * eV
 
     ## recombination parameters
+    #=
+    ni_CIGS           = sqrt(Nc * Nv) * exp(-(Ec_CIGS - Ev_CIGS) / (2 * kB * T)) # intrinsic concentration
+    n0_CIGS           = Nc * Boltzmann( (Et-Ec_CIGS) / (kB*T) )             # Boltzmann equilibrium concentration
+    p0_CIGS           = ni_CIGS^2 / n0_CIGS                                      # Boltzmann equilibrium concentration
+    ni_ZnO            = sqrt(Nc * Nv) * exp(-(Ec_ZnO - Ev_ZnO) / (2 * kB * T)) # intrinsic concentration
+    n0_ZnO            = Nc * Boltzmann( (Et-Ec_ZnO) / (kB*T) )             # Boltzmann equilibrium concentration
+    p0_ZnO            = ni_ZnO^2 / n0_ZnO                                      # Boltzmann equilibrium concentration
+    =#
     Auger             = 1.0e-29  * cm^6 / s          # 1.0e-41 m^6 / s
     SRH_LifeTime      = 1.0e-3   * ns               
     Radiative         = 1.0e-10  * cm^3 / s          # 1.0e-16 m^3 / s
     G                 = 1.0e20   / (cm^3 * s)
     ## ???
     A_CIGS            = 1.0e5    / cm
+    A_ZnO             = 0.0      / cm
     N0                = 1e17     / cm^2/s
 
     ## doping -- trap doping will not be set and thus automatically zero
     Na                = 1.0e15 / (cm^3)   
 
     ## we will impose this applied voltage on one boundary
-    voltageStep   = voltageStep * V
+    voltageMin   = voltageMin * V 
+    voltageMax   = voltageMax * V
 
     println("*** done\n")
     ################################################################################
@@ -113,8 +132,8 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     ## initialize Data instance and fill in data
     data                                = Data(grid, numberOfCarriers)
 
-    ## Possible choices: Stationary, Transient
-    data.modelType                     = Transient
+    ## possible choices: model_stationary, model_transient
+    data.modelType                      = Stationary
 
     ## possible choices: Boltzmann, FermiDiracOneHalfBednarczyk, FermiDiracOneHalfTeSCA FermiDiracMinusOne, Blakemore
     data.F                             .= [FermiDiracOneHalfTeSCA, FermiDiracOneHalfTeSCA]
@@ -127,13 +146,14 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     #enable_traps!(data)
     
     ## Possible choices: GenerationNone, GenerationUniform, GenerationBeerLambert
-    # NOTE: GenerationBeerLambert doesn't work in 2D case!
     data.generationModel                = GenerationNone#GenerationBeerLambert
 
     ## Possible choices: OhmicContact, SchottkyContact (outer boundary) and InterfaceModelNone,
     ## InterfaceModelSurfaceReco (inner boundary).
+    #data.boundary_type[bregionAcceptorLeft ]    = ohmic_contact#schottky_contact                       
+    #data.boundary_type[bregionAcceptorRight]    = ohmic_contact#schottky_contact   
     data.boundaryType[bregionAcceptorLeft ]    = SchottkyContact                       
-    data.boundaryType[bregionAcceptorRight]    = OhmicContact   
+    data.boundaryType[bregionAcceptorRight]    = SchottkyContact#OhmicContact   
     
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
@@ -149,8 +169,9 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     params                                              = Params(grid, numberOfCarriers)
     params.temperature                                  = T
     params.UT                                           = (kB * params.temperature) / q
-    params.chargeNumbers[iphin]                         = -1
+    params.chargeNumbers[iphin]                         =  -1
     params.chargeNumbers[iphip]                         =  1
+    # params.chargeNumbers[iphit]                         =  1  # +1: hole trap is used
 
     for ibreg in 1:numberOfBoundaryRegions   # boundary region data
         params.bDensityOfStates[iphin, ibreg]           = Nc
@@ -159,8 +180,8 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         # params.bBandEdgeEnergy[iphit, ibreg]            = Et
     end
 
-    params.bBandEdgeEnergy[iphin, bregionAcceptorRight]     = Ec_CIGS
-    params.bBandEdgeEnergy[iphip, bregionAcceptorRight]     = Ev_CIGS
+    params.bBandEdgeEnergy[iphin, bregionAcceptorRight]         = Ec_CIGS
+    params.bBandEdgeEnergy[iphip, bregionAcceptorRight]         = Ev_CIGS
     params.bBandEdgeEnergy[iphin, bregionAcceptorLeft]      = Ec_CIGS
     params.bBandEdgeEnergy[iphip, bregionAcceptorLeft]      = Ev_CIGS
 
@@ -173,13 +194,15 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         params.densityOfStates[iphip, ireg]             = Nv
         params.bandEdgeEnergy[iphin, ireg]              = Ec_CIGS
         params.bandEdgeEnergy[iphip, ireg]              = Ev_CIGS
-        params.mobility[iphin, ireg]                    = mun_CIGS
+        params.mobility[iphin, ireg]                    = mup_CIGS
         params.mobility[iphip, ireg]                    = mup_CIGS
 
         ## recombination parameters
         params.recombinationRadiative[ireg]             = Radiative
         params.recombinationSRHLifetime[iphin, ireg]    = SRH_LifeTime
         params.recombinationSRHLifetime[iphip, ireg]    = SRH_LifeTime
+        #params.recombinationSRHTrapDensity[iphin, ireg] = n0_CIGS
+        #params.recombinationSRHTrapDensity[iphip, ireg] = p0_CIGS
         params.recombinationAuger[iphin, ireg]          = Auger
         params.recombinationAuger[iphip, ireg]          = Auger
 
@@ -190,8 +213,28 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         
     end
 
+    ## overwrite parameters in ZnO donor region
+    #=
+    params.generationUniform[regionAcceptorLeft]                  = 0.0      # only used if for "generation_uniform"
+    params.generationAbsorption[regionAcceptorLeft]               = A_ZnO    # only used if for "generation_beer_lambert"
+    params.generationIncidentPhotonFlux[regionAcceptorLeft]       = N0
+    params.recombinationSRHTrapDensity[iphin, regionAcceptorLeft] = n0_ZnO
+    params.recombinationSRHTrapDensity[iphip, regionAcceptorLeft] = p0_ZnO
+    params.bandEdgeEnergy[iphin, regionAcceptorLeft]              = Ec_ZnO
+    params.bandEdgeEnergy[iphip, regionAcceptorLeft]              = Ev_ZnO
+    params.dielectricConstant[regionAcceptorLeft]                 = εr_ZnO 
+    params.mobility[iphin, regionAcceptorLeft]                    = mun_ZnO
+    params.mobility[iphip, regionAcceptorLeft]                    = mup_ZnO
+    =#
+    ## hole trap density only high in grain
+    # params.densityOfStates[iphit, regionAcceptorLeft]          = Nt_low
+    # params.densityOfStates[iphit, regionAcceptorRight]   = Nt_low
+    # params.densityOfStates[iphit, regionAcceptorTrap]   = Nt
+    # params.densityOfStates[iphit, regionAcceptorRight]  = Nt_low
+
     ## doping -- since we do not set any doping for the traps it is automatically zero
-    params.doping[iphip, regionAcceptor]             = Na    
+    params.doping[iphip, regionAcceptorLeft]             = Na        
+    params.doping[iphip, regionAcceptorRight]            = Na        
 
     ## boundary doping
     params.bDoping[iphip, bregionAcceptorRight]          = Na        
@@ -201,6 +244,10 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     params.SchottkyBarrier[bregionAcceptorLeft]             = barrier_left
     params.bVelocity[iphin,bregionAcceptorLeft]             = vn 
     params.bVelocity[iphip,bregionAcceptorLeft]             = vp 
+
+    params.SchottkyBarrier[bregionAcceptorRight]                = barrier_right
+    params.bVelocity[iphin,bregionAcceptorRight]                = vn 
+    params.bVelocity[iphip,bregionAcceptorRight]                = vp 
 
     data.params                                         = params
     ctsys                                               = System(grid, data, unknown_storage=unknown_storage)
@@ -213,6 +260,10 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     ################################################################################
 
     ## set ohmic contact in bregionAcceptorRight and schottky contact in bregionAcceptorLeft
+    #set_schottky_contact!(ctsys, bregionAcceptorRight, appliedVoltage = 0.0)
+    #set_schottky_contact!(ctsys, bregionAcceptorLeft , appliedVoltage = 0.0)
+    #set_ohmic_contact!(ctsys, bregionAcceptorRight   , 0.0)
+    #set_ohmic_contact!(ctsys, bregionAcceptorLeft, 0.0)
     set_contact!(ctsys, bregionAcceptorRight, Δu = 0.0)
     set_contact!(ctsys, bregionAcceptorLeft,  Δu = 0.0)
 
@@ -272,60 +323,38 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         label_density[iphip]   = "p";                    
         label_solution[iphip]  = "\$ \\varphi_p\$"
 
+        ## for traps 
+        # label_energy[1, iphit] = "\$E_{\\tau}-q\\psi\$"; label_energy[2, iphit] = "\$ - q \\varphi_{\\tau}\$"
+        # label_density[iphit]   = "\$n_{\\tau}\$";        label_solution[iphit]  = "\$ \\varphi_{\\tau}\$"
         ## ##### set legend for plotting routines #####
         Plotter.figure()
         plot_energies(Plotter, grid, data, solution, "Equilibrium", label_energy)
         Plotter.figure()
         plot_densities(Plotter, grid, data, solution,"Equilibrium", label_density)
+
+        # plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
+        # Plotter.figure()
     end
 
     ################################################################################
-    println("Stationary loop to increase bias")
-    ################################################################################
-    
-    ## set calculationType to OutOfEquilibrium for starting with respective simulation.
-    data.calculationType = OutOfEquilibrium
-    biasValues           = range(0.0, stop = voltageStep, length = 11)
-
-    ## increase slowly the bias in stationary calculations
-
-    for Δu in biasValues
-
-        ## Apply new voltage: set non equilibrium boundary conditions
-        set_contact!(ctsys, bregionAcceptorLeft, Δu = Δu)
-
-        if test == false
-            println("bias value: Δu = $(Δu)")
-        end
-
-        # the Inf as tstep corresponds to stationary calculations.
-        solve!(solution, initialGuess, ctsys, control  = control, tstep = 1e-12)
-
-
-        PyPlot.clf()
-        plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
-        PyPlot.pause(0.5)
-
-        initialGuess .= solution
-
-    end # bias values
-
-
-    ################################################################################
-    println("Transient bias loop")
+    println("Stationary bias loop")
     ################################################################################
     
     ## set calculationType to OutOfEquilibrium for starting with respective simulation.
     data.calculationType = OutOfEquilibrium      # Rn = Rp = R, since the model type is stationary
-    Voltage_step         = voltageStep            # final bias value
+    endVoltage           = voltageMin            # final bias value
 
-    ## Scan rate and time steps
-    number_tsteps        = 50
-    tend                 = 1e-9
-    tvalues              = range(0.0, stop = tend, length = number_tsteps)
-    Δt                   = tvalues[2] - tvalues[1]
-
-    IV         = zeros(0)     
+    IV         = zeros(0)   
+    #maxBias    = voltageMin  
+    #maxBias2   = -1*voltageMin   
+    biasSteps  = 101
+    biasValues = collect(range(voltageMin, stop = voltageMax, length = biasSteps))
+    if(!(0.0 in biasValues))
+        append!(biasValues, 0.0)
+        sort!(biasValues)
+    end
+    #print(biasValues)
+    #biasValues2 = collect(range(0, stop= maxBias2, length = biasSteps))
     chargeDensities = zeros(0)
     #chargeDensities2 = zeros(0)
     
@@ -334,70 +363,109 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     z_device = 1.0    * cm  # depth of device
 
     ## adjust Newton parameters
-    control                = NewtonControl()
-    control.verbose        = verbose
-    control.tol_absolute   = 1.0e-10
-    control.tol_relative   = 1.0e-10
-    control.tol_round      = 1.0e-4
-    control.damp_initial   = 0.5
-    control.damp_growth    = 1.61
-    control.max_iterations = 100
-    control.max_round      = 3
+    control.tol_absolute      = 1.0e-10
+    control.tol_relative      = 1.0e-10
+    control.tol_round         = 1.0e-7
+    control.damp_initial      = 0.5
+    control.damp_growth       = 1.2
+    control.max_iterations    = 30
+    control.max_round         = 3
 
     
-    
-    for istep = 2:number_tsteps
+    indexOfZero = indexin(0.0, biasValues)[1]
+    i = indexOfZero
 
-        t  = tvalues[istep]          # Actual time
-        Δu = Voltage_step           # Applied voltage
-        Δt = t - tvalues[istep-1]    # Time step size
+    #for i in eachindex(biasValues)
+    while (i>0)
+        Δu = biasValues[i] # bias
 
-        ## Apply new voltage: set non equilibrium boundary conditions
-        set_contact!(ctsys, bregionAcceptorLeft, Δu = Δu)
+        ## set non equilibrium boundary condition
+        #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
+        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
 
-        if test == false
-            println("time value: t = $(t)")
-        end
+        ## increase generation rate with bias
+        #ctsys.data.λ2 = 10.0^(-biasSteps + i)
+     
+        ## solve time step problems with timestep Δt
+        solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
 
-        solve!(solution, initialGuess, ctsys, control  = control, tstep = Δt)
-
-        ## get I-V data
-        current = get_current_val(ctsys, solution, initialGuess, Δt)
+        ## save IV data
+        current = get_current_val(ctsys, solution)
         push!(IV, w_device * z_device * current)
-        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptor]))
+
+        ## store CHARGE DENSITY in CIGS
+        #push!(chargeDensities,chargeDensity(ctsys,solution)[regionAcceptorLeft])
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
         initialGuess .= solution
+        i=i-1
+    end # bias loop 1
 
-    end # bias loop
+    reverse!(IV)
+    reverse!(chargeDensities)
 
-       println("*** done\n")
+    ## plot energies and qFermi levels for voltageMin
+    if plotting 
+        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
+        Plotter.figure()
+                
+    end
+    
+    i = indexOfZero+1
+    initialGuess .= equilibriumSolution
+
+    while (i<=length(biasValues))
+        Δu = biasValues[i] # bias
+
+        ## set non equilibrium boundary condition
+        #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
+        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
+    
+        ## solve time step problems with timestep Δt
+        solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
+
+        ## save IV data
+        current = get_current_val(ctsys, solution)
+        push!(IV, w_device * z_device * current)
+
+        ## store uncompensated CHARGE DENSITY in CIGS
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
+
+        initialGuess .= solution
+        i=i+1
+    end # bias loop 2
+
+    FileIO.save("solution.jld2","solution",solution)
+
+    println("*** done\n")
 
     ## compute static capacitance: check this is correctly computed
-    # staticCapacitance = diff(chargeDensities) ./ diff(biasValues)
-    # writedlm( "staticCapacitance.csv",  staticCapacitance, ',')
+
+    staticCapacitance = diff(chargeDensities) ./ diff(biasValues)
+    writedlm( "staticCapacitance.csv",  staticCapacitance, ',')
     writedlm( "chargeDensities.csv"  ,  chargeDensities  , ',')
     writedlm( "biasValues.csv"       ,  biasValues       , ',')
 
     ## plot solution and IV curve
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_energy)
+        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_density)
+        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
         Plotter.figure()
-        plot_IV(Plotter, tvalues,IV, "\$ t_{end}=$(tvalues[end])s\$", plotGridpoints = true)
-        Plotter.ylabel("I[A]")
-        Plotter.xlabel("t[s]")
-        Plotter.figure()
-        plot_IV(Plotter, tvalues,chargeDensities, tvalues[end], plotGridpoints = true)
-        Plotter.title("Uncompensated charge density")
-        Plotter.ylabel("Charge density [C]")
+        # plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
         # Plotter.figure()
-        # plot_IV(Plotter, tvalues,abs.(staticCapacitance), tvalues[end-1], plotGridpoints = true)
-        # Plotter.title("Static capacitance in donor region")
-        # Plotter.ylabel("Static capacitance [F]")
+        plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
+        Plotter.figure()
+        plot_IV(Plotter, biasValues,chargeDensities, biasValues[end], plotGridpoints = true)
+        Plotter.title("Charge density in donor region")
+        Plotter.ylabel("Charge density [C]")
+        Plotter.figure()
+        plot_IV(Plotter, biasValues,abs.(staticCapacitance), biasValues[end-1], plotGridpoints = true)
+        Plotter.title("Static capacitance in donor region")
+        Plotter.ylabel("Static capacitance [F]")
                
     end
-
+ 
     testval = solution[data.index_psi, 10]
     return testval
 
