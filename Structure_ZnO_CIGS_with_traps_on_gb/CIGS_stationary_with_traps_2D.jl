@@ -31,8 +31,8 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     numberOfRegions     = length(regions)
 
     ## boundary region numbers
-    bregionZnO            = 1
-    bregionCIGSRight         = 2
+    bregionZnO              = 1
+    bregionCIGSRight        = 2
     bregionInner            = 3
     bregionNoFlux           = 4  
     bregions                = [bregionZnO, bregionCIGSRight, bregionInner, bregionNoFlux]
@@ -44,8 +44,8 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     width_CIGS_Left_down  = 1.0 * μm
     width_CIGS_Left_up    = 1.0 * μm #bigger or smaller will bend the grain boundary e.g. 1.5 * μm  
     width_grain_boundary  = 0.01 * μm
-    width_CIGS_Right_down = total_width - width_CIGS_Left_down - width_grain_boundary
-    width_CIGS_Right_up   = total_width - width_CIGS_Left_up - width_grain_boundary 
+    width_CIGS_Right_down = total_width - width_ZnO - width_CIGS_Left_down - width_grain_boundary
+    width_CIGS_Right_up   = total_width - width_ZnO - width_CIGS_Left_up   - width_grain_boundary 
     height                = 1.0 * μm
 
     b = SimplexGridBuilder(Generator=Triangulate)
@@ -139,7 +139,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     mup_CIGS          = 25                   * (cm^2) / (V * s)
     mun_ZnO           = 100                  * (cm^2) / (V * s)
     mup_ZnO           = 25                   * (cm^2) / (V * s)
-    mut               = 0                    * (cm^2) / (V * s)  # no flux for traps
+    # mut               = 0                    * (cm^2) / (V * s)  # no flux for traps
     εr_CIGS           = 13.6                 *  1.0
     εr_ZnO            = 9                    *  1.0
     T                 = 300.0                *  K
