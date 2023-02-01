@@ -5,10 +5,8 @@ Simulating stationary charge transport in a pn junction with hole traps and a Sc
 
 module Example_CIGS_Schottky_2D
 
-using VoronoiFVM
 using ChargeTransport
 using ExtendableGrids
-using GridVisualize
 using PyPlot
 using DelimitedFiles
 
@@ -89,23 +87,18 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     Nc                = 4.351959895879690e17 / (cm^3)
     Nv                = 9.139615903601645e18 / (cm^3)
-    Nt                = 5e14                / (cm^3)   
-    Nt_low            = Nt#/1e3                        
+    Nt                = 5e14                / (cm^3)      
     mun_CIGS          = 100.0                * (cm^2) / (V * s)
     mup_CIGS          = 25                   * (cm^2) / (V * s)
-    mun_ZnO           = 100                  * (cm^2) / (V * s)
-    mup_ZnO           = 25                   * (cm^2) / (V * s)
-    mut               = 0                    * (cm^2) / (V * s)  # no flux for traps
-    εr_CIGS           = 13.6                 *  1.0              
-    εr_ZnO            = 9                    *  1.0                
+    εr_CIGS           = 13.6                 *  1.0                       
     T                 = 300.0                *  K
 
     An                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
-    barrier_right     = Ev_CIGS + 0.4 * eV
-    barrier_left      = Ev_CIGS + 0.6 * eV
+    barrier_right     = 0.7 * eV
+    barrier_left      = 0.5 * eV
 
     ## recombination parameters
     #=
@@ -122,7 +115,6 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     G                 = 1.0e20   / (cm^3 * s)
     ## ???
     A_CIGS            = 1.0e5    / cm
-    A_ZnO             = 0.0      / cm
     N0                = 1e17     / cm^2/s
 
     ## doping -- trap doping will not be set and thus automatically zero
@@ -154,7 +146,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     #enable_traps!(data)
     
     ## Possible choices: GenerationNone, GenerationUniform, GenerationBeerLambert
-    data.generationModel                = GenerationBeerLambert
+    data.generationModel                = GenerationNone#GenerationBeerLambert
 
     ## Possible choices: OhmicContact, SchottkyContact (outer boundary) and InterfaceModelNone,
     ## InterfaceModelSurfaceReco (inner boundary).
@@ -165,7 +157,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation              = ExcessChemicalPotential
+    data.fluxApproximation              .= ExcessChemicalPotential
    
     println("*** done\n")
 
@@ -195,7 +187,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     for ireg in 1:numberOfRegions           # interior region data
 
-        params.dielectricConstant[ireg]                 = εr_CIGS       
+        params.dielectricConstant[ireg]                 = εr_CIGS*ε0       
 
         ## effective DOS, band-edge energy and mobilities
         params.densityOfStates[iphin, ireg]             = Nc
@@ -521,7 +513,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
                
     end
  
-    testval = solution[data.index_psi, 10]
+    testval = sum(filter(!isnan, solution))/length(solution)
     return testval
 
     println("*** done\n")

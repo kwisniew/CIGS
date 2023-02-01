@@ -7,10 +7,8 @@ Simulating stationary charge transport in a pn junction with hole traps and a Sc
 
 module CIGS_stationary_with_traps_2D_simple_grid
 
-using VoronoiFVM
 using ChargeTransport
 using ExtendableGrids
-using GridVisualize
 using PyPlot
 using SimplexGridFactory
 using Triangulate
@@ -38,10 +36,10 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     numberOfBoundaryRegions = length(bregions)
 
     ## grid
-    width_ZnO  = 0.5 * μm 
-    width_CIGS_Left  = 1.0 * μm 
+    width_ZnO             = 0.5 * μm 
+    width_CIGS_Left       = 1.0 * μm 
     width_grain_boundary  = 0.01 * μm
-    width_CIGS_Right = 1.0 * μm
+    width_CIGS_Right      = 1.0 * μm
     height                = 1.0 * μm
 
     x0              = 0.0 * μm
@@ -139,7 +137,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
-    barrier           = Ev_CIGS + 0.4 * eV
+    barrier           = 0.7* eV
 
     ## recombination parameters
     ni_CIGS           = sqrt(Nc * Nv) * exp(-(Ec_CIGS - Ev_CIGS) / (2 * kB * T)) # intrinsic concentration
@@ -161,7 +159,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     Na                = 5.0e15 / (cm^3)
 
     ## we will impose this applied voltage on one boundary
-    voltageAcceptor   = 0.1 * V
+    voltageAcceptor   = 1 * V
 
     if test == false
         println("*** done\n")
@@ -191,7 +189,8 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     zt = 1
     Nt_vector = similar(data.params.densityOfStates[zt,:])
     Nt_vector[regionGrainBoundary] = Nt
-    enable_traps!(data,z=zt,Nt=Nt_vector)
+    NT = [0, 0, Nt]
+    add_trap_density!(data=data, zt = zt, Nt = NT)
 
     ## Possible choices: GenerationNone, GenerationUniform, GenerationBeerLambert
     data.generationModel                = GenerationNone#GenerationBeerLambert
@@ -204,7 +203,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation              = ExcessChemicalPotential
+    data.fluxApproximation              .= ExcessChemicalPotential
 
     if test == false
         println("*** done\n")
@@ -238,7 +237,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     for ireg in [regionZnO, regionCIGS, regionGrainBoundary]          # interior region data
 
-        params.dielectricConstant[ireg]                 = εr_CIGS
+        params.dielectricConstant[ireg]                 = εr_CIGS*ε0
 
         ## effective DOS, band-edge energy and mobilities
         params.densityOfStates[iphin, ireg]             = Nc
@@ -274,7 +273,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     params.recombinationSRHTrapDensity[iphip, regionZnO] = p0_ZnO
     params.bandEdgeEnergy[iphin, regionZnO]              = Ec_ZnO
     params.bandEdgeEnergy[iphip, regionZnO]              = Ev_ZnO
-    params.dielectricConstant[regionZnO]                 = εr_ZnO
+    params.dielectricConstant[regionZnO]                 = εr_ZnO*ε0
     params.mobility[iphin, regionZnO]                    = mun_ZnO
     params.mobility[iphip, regionZnO]                    = mup_ZnO
 
@@ -285,10 +284,10 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     # params.densityOfStates[iphit, regionCIGS]  = Nt_low
 
     ## doping -- since we do not set any doping for the traps it is automatically zero
-    params.doping[iphin, regionZnO]                   = Nd
+    params.doping[iphin, regionZnO]             = Nd
     params.doping[iphip, regionCIGS]            = Na
-    params.doping[iphip, regionGrainBoundary]            = Na
-    params.doping[iphip, regionCIGS]           = Na
+    params.doping[iphip, regionGrainBoundary]   = Na
+    params.doping[iphip, regionCIGS]            = Na
 
     ## boundary doping
     params.bDoping[iphin, bregionZnO]                 = Nd
@@ -503,7 +502,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     end
 
 
-    testval = VoronoiFVM.norm(ctsys.fvmsys, solution, 2)
+    testval = sum(filter(!isnan, solution))/length(solution)
     return testval
 
     println("*** done\n")

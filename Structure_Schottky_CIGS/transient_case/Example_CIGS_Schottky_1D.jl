@@ -3,14 +3,14 @@
 Simulating stationary charge transport in a pn junction with hole traps and a Schottky boundary condition.
 =#
 
-module Example_CIGS_Schottky_2D_unstr_grid
+module Example_CIGS_Schottky_1D
 
+using VoronoiFVM
 using ChargeTransport
 using ExtendableGrids
+using GridVisualize
 using PyPlot
 using DelimitedFiles
-using SimplexGridFactory
-using Triangulate
 
 ## function to initialize the grid for a possible extension to other p-i-n devices.
 function initialize_pin_grid(refinementfactor, h_pdoping_left, h_pdoping_right)
@@ -28,73 +28,41 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     println("Set up grid and regions")
     ################################################################################
 
- ## region numbers
- regionCIGSLeft       = 1  # CIGS
- regionCIGSRight      = 2  # grain boundary region
- regions              = [regionCIGSLeft, regionCIGSRight]
- numberOfRegions      = length(regions)
+    ## region numbers
+    regionAcceptorLeft  = 1                           # n doped region
+    regionAcceptorRight = 2                           # p doped region
+    regions             = [regionAcceptorLeft, regionAcceptorRight]
+    numberOfRegions     = length(regions)
 
- ## boundary region numbers
- bregionCIGSLeft  = 1
- bregionCIGSRight = 2
- bregionInterface = 3
- bregionNoFlux    = 4
- bregions                = [bregionCIGSRight, bregionCIGSLeft, bregionInterface, bregionNoFlux]
- numberOfBoundaryRegions = length(bregions)   
+    ## boundary region numbers
+    bregionAcceptorLeft     = 1
+    bregionAcceptorRight    = 2
+    bregions                = [bregionAcceptorRight, bregionAcceptorLeft]
+    numberOfBoundaryRegions = length(bregions)
 
- ## grid
- total_width           = 2 * μm
- width_CIGS_Left_down  = 1.0 * μm
- width_CIGS_Left_up    = 1.0 * μm  
- width_CIGS_Right_down = total_width - width_CIGS_Left_down 
- width_CIGS_Right_up   = total_width - width_CIGS_Left_up 
- height                = 1.0 * μm
+    ## grid
+    refinementfactor        = 2^(n-1)
+    #h_pdoping_left               = 0.5 * μm
+    h_pdoping_left          = 1 * μm
 
-b                = SimplexGridBuilder(Generator=Triangulate)
+    coord                   = initialize_pin_grid(refinementfactor,
+                                                  h_pdoping_left,
+                                                  h_pdoping_left,
+                                                 )
 
-## specify boundary nodes
-length_0         = point!(b, 0.0, 0.0)
-length_CIGS_left = point!(b, width_CIGS_Left_down, 0.0)
-length_L         = point!(b, width_CIGS_Left_down + width_CIGS_Right_down, 0.0)
+    grid                    = simplexgrid(coord)
 
-height_0         = point!(b, 0.0, height)
-height_CIGS_left = point!(b, width_CIGS_Left_up, height)
-height_L         = point!(b, width_CIGS_Left_up + width_CIGS_Right_up, height)
+    ## set different regions in grid, doping profiles do not intersect
+    ## n doped 
+    cellmask!(grid, [0.0 * μm], [h_pdoping_left], regionAcceptorLeft)          
+    ## p doped                    
+    cellmask!(grid, [h_pdoping_left], [h_pdoping_left + h_pdoping_left], regionAcceptorRight)    
 
-## specify boundary regions
-## metal interface
-facetregion!(b, bregionCIGSLeft)
-facet!(b, length_0, height_0)
-facetregion!(b, bregionCIGSRight)
-facet!(b, length_L, height_L)
-
-## no flux
-facetregion!(b, bregionNoFlux)
-facet!(b, length_0, length_L)
-facetregion!(b, bregionNoFlux)
-facet!(b, height_0, height_L)
-
-#  ## inner interface
-facetregion!(b, bregionInterface)
-facet!(b, length_CIGS_left, height_CIGS_left)
-
-## cell regions
-cellregion!(b, regionCIGSLeft)
-regionpoint!(b, width_CIGS_Left_down/2, height/2)
-cellregion!(b,regionCIGSRight)
-regionpoint!(b, width_CIGS_Left_down + width_CIGS_Right_down/2, height/2)
-
-options!(b,maxvolume=(0.1*μm)^2)
-
-grid           = simplexgrid(b)
 
     if plotting
         Plotter.figure()
-        builderplot(b,Plotter=Plotter,resolution=(750,700))
-        Plotter.figure()
-        gridplot(grid, Plotter= PyPlot, resolution=(600,400),linewidth=0.5, legend=:lt)
+        gridplot(grid, Plotter = Plotter, legend=:lt)
         Plotter.title("Grid")
-        
     end
 
     println("*** done\n")
@@ -113,8 +81,11 @@ grid           = simplexgrid(b)
     Nc                = 4.351959895879690e17 / (cm^3)
     Nv                = 9.139615903601645e18 / (cm^3)
     Nt                = 5e14                / (cm^3)   
+    Nt_low            = Nt#/1e3                        
     mun_CIGS          = 100.0                * (cm^2) / (V * s)
     mup_CIGS          = 25                   * (cm^2) / (V * s)
+    mun_ZnO           = 100                  * (cm^2) / (V * s)
+    mup_ZnO           = 25                   * (cm^2) / (V * s)
     mut               = 0                    * (cm^2) / (V * s)  # no flux for traps
     εr_CIGS           = 13.6                 *  1.0              
     εr_ZnO            = 9                    *  1.0                
@@ -125,7 +96,7 @@ grid           = simplexgrid(b)
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
     barrier_right     = Ev_CIGS + 0.4 * eV
-    barrier_left      = 0.5 * eV
+    barrier_left      = Ev_CIGS + 1.0 * eV
 
     ## recombination parameters
     #=
@@ -174,19 +145,18 @@ grid           = simplexgrid(b)
     #enable_traps!(data)
     
     ## Possible choices: GenerationNone, GenerationUniform, GenerationBeerLambert
-    data.generationModel                = GenerationNone
+    data.generationModel                = GenerationNone#GenerationBeerLambert
 
     ## Possible choices: OhmicContact, SchottkyContact (outer boundary) and InterfaceModelNone,
     ## InterfaceModelSurfaceReco (inner boundary).
     #data.boundary_type[bregionAcceptorLeft ]    = ohmic_contact#schottky_contact                       
     #data.boundary_type[bregionAcceptorRight]    = ohmic_contact#schottky_contact   
-    data.boundaryType[bregionCIGSLeft ]    = SchottkyContact                       
-    data.boundaryType[bregionCIGSRight]    = OhmicContact
-    # data.boundaryType[bregionInterface]    = InterfaceModelNone    
+    data.boundaryType[bregionAcceptorLeft ]    = SchottkyContact                       
+    data.boundaryType[bregionAcceptorRight]    = OhmicContact   
     
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation              .= ExcessChemicalPotential
+    data.fluxApproximation              = ExcessChemicalPotential
    
     println("*** done\n")
 
@@ -209,14 +179,14 @@ grid           = simplexgrid(b)
         # params.bBandEdgeEnergy[iphit, ibreg]            = Et
     end
 
-    params.bBandEdgeEnergy[iphin, bregionCIGSRight]     = Ec_CIGS
-    params.bBandEdgeEnergy[iphip, bregionCIGSRight]     = Ev_CIGS
-    params.bBandEdgeEnergy[iphin, bregionCIGSLeft]      = Ec_CIGS
-    params.bBandEdgeEnergy[iphip, bregionCIGSLeft]      = Ev_CIGS
+    params.bBandEdgeEnergy[iphin, bregionAcceptorRight]         = Ec_CIGS
+    params.bBandEdgeEnergy[iphip, bregionAcceptorRight]         = Ev_CIGS
+    params.bBandEdgeEnergy[iphin, bregionAcceptorLeft]      = Ec_CIGS
+    params.bBandEdgeEnergy[iphip, bregionAcceptorLeft]      = Ev_CIGS
 
     for ireg in 1:numberOfRegions           # interior region data
 
-        params.dielectricConstant[ireg]                 = εr_CIGS*ε0       
+        params.dielectricConstant[ireg]                 = εr_CIGS       
 
         ## effective DOS, band-edge energy and mobilities
         params.densityOfStates[iphin, ireg]             = Nc
@@ -262,17 +232,17 @@ grid           = simplexgrid(b)
     # params.densityOfStates[iphit, regionAcceptorRight]  = Nt_low
 
     ## doping -- since we do not set any doping for the traps it is automatically zero
-    params.doping[iphip, regionCIGSLeft]             = Na        
-    params.doping[iphip, regionCIGSRight]            = Na        
+    params.doping[iphip, regionAcceptorLeft]             = Na        
+    params.doping[iphip, regionAcceptorRight]            = Na        
 
     ## boundary doping
-    params.bDoping[iphip, bregionCIGSRight]          = Na        
-    params.bDoping[iphip, bregionCIGSLeft]           = Na   
+    params.bDoping[iphip, bregionAcceptorRight]          = Na        
+    params.bDoping[iphip, bregionAcceptorLeft]           = Na   
     
     ## values for the schottky contacts
-    params.SchottkyBarrier[bregionCIGSLeft]             = barrier_left
-    params.bVelocity[iphin,bregionCIGSLeft]             = vn 
-    params.bVelocity[iphip,bregionCIGSLeft]             = vp 
+    params.SchottkyBarrier[bregionAcceptorLeft]             = barrier_left
+    params.bVelocity[iphin,bregionAcceptorLeft]             = vn 
+    params.bVelocity[iphip,bregionAcceptorLeft]             = vp 
 
     #params.SchottkyBarrier[bregionAcceptorRight]                = barrier_right
     #params.bVelocity[iphin,bregionAcceptorRight]                = vn 
@@ -293,8 +263,8 @@ grid           = simplexgrid(b)
     #set_schottky_contact!(ctsys, bregionAcceptorLeft , appliedVoltage = 0.0)
     #set_ohmic_contact!(ctsys, bregionAcceptorRight   , 0.0)
     #set_ohmic_contact!(ctsys, bregionAcceptorLeft, 0.0)
-    set_contact!(ctsys, bregionCIGSRight, Δu = 0.0)
-    set_contact!(ctsys, bregionCIGSLeft,  Δu = 0.0)
+    set_contact!(ctsys, bregionAcceptorRight, Δu = 0.0)
+    set_contact!(ctsys, bregionAcceptorLeft,  Δu = 0.0)
 
 
     println("*** done\n")
@@ -337,38 +307,32 @@ grid           = simplexgrid(b)
 
 
     if plotting 
+        ## ##### set legend for plotting routines #####
+        label_solution, label_density, label_energy = set_plotting_labels(data)
 
-        ipsi = data.index_psi
-        X = grid[Coordinates][1,:]
-        Y = grid[Coordinates][2,:]
+        ## for electrons 
+        label_energy[1, iphin] = "\$E_c-q\\psi\$"       
+        label_energy[2, iphin] = "\$ - q \\varphi_n\$"
+        label_density[iphin]   = "n";                    
+        label_solution[iphin]  = "\$ \\varphi_n\$"
 
-        #Plot energies
+        ## for holes 
+        label_energy[1, iphip] = "\$E_v-q\\psi\$"       
+        label_energy[2, iphip] = "\$ - q \\varphi_p\$"
+        label_density[iphip]   = "p";                    
+        label_solution[iphip]  = "\$ \\varphi_p\$"
+
+        ## for traps 
+        # label_energy[1, iphit] = "\$E_{\\tau}-q\\psi\$"; label_energy[2, iphit] = "\$ - q \\varphi_{\\tau}\$"
+        # label_density[iphit]   = "\$n_{\\tau}\$";        label_solution[iphit]  = "\$ \\varphi_{\\tau}\$"
+        ## ##### set legend for plotting routines #####
         Plotter.figure()
-        #TO DO: make the labels visible 
-        Plotter.surf(X[:], Y[:], Ev_CIGS/q .- solution[ipsi, :], label="Ev")
-        Plotter.surf(X[:], Y[:], Ec_CIGS/q .- solution[ipsi, :], label="Ec")
-        Plotter.surf(X[:], Y[:], -q*solution[iphin, :], label="\$ \\varphi_n \$")
-        Plotter.surf(X[:], Y[:], -q*solution[iphip, :], label="\$ \\varphi_p \$")
-        
-        Plotter.title("Band Edge Energies and qFermi levels in Equilibrium")
-        Plotter.xlabel("length [m]")
-        Plotter.ylabel("height [m]")
-        Plotter.zlabel("Energy [eV]")
-        Plotter.tight_layout()
-
-        # Plot densities
+        plot_energies(Plotter, grid, data, solution, "Equilibrium", label_energy)
         Plotter.figure()
-        #TO DO: make the labels visible 
-        Plotter.surf(X[:], Y[:], log10.(1.0e-6 .*Nc.*exp.((-(Ec_CIGS/q .- solution[ipsi, :])-solution[iphin, :])/(params.UT)))) #electron density
-        Plotter.surf(X[:], Y[:], log10.(1.0e-6 .*Nv.*exp.(( (Ev_CIGS/q .- solution[ipsi, :])+solution[iphip, :])/(params.UT)))) #hole density
-        
-        Plotter.title("electrons and holes densities")
-        Plotter.xlabel("length [m]")
-        Plotter.ylabel("height [m]")
-        Plotter.zlabel("Densities [log(cm-3)]")
-        Plotter.tight_layout()
+        plot_densities(Plotter, grid, data, solution,"Equilibrium", label_density)
 
-
+        # plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
+        # Plotter.figure()
     end
 
     ################################################################################
@@ -377,20 +341,25 @@ grid           = simplexgrid(b)
     
     ## set calculationType to OutOfEquilibrium for starting with respective simulation.
     data.calculationType = OutOfEquilibrium      # Rn = Rp = R, since the model type is stationary
+    endVoltage           = voltageMin            # final bias value
 
     IV         = zeros(0)   
+    #maxBias    = voltageMin  
+    #maxBias2   = -1*voltageMin   
     biasSteps  = 101
     biasValues = collect(range(voltageMin, stop = voltageMax, length = biasSteps))
     if(!(0.0 in biasValues))
         append!(biasValues, 0.0)
         sort!(biasValues)
     end
-
+    #print(biasValues)
+    #biasValues2 = collect(range(0, stop= maxBias2, length = biasSteps))
     chargeDensities = zeros(0)
+    #chargeDensities2 = zeros(0)
     
 
     w_device = 1.0    * cm  # width of device
-    z_device = 1.0#    * cm  # depth of device
+    z_device = 1.0    * cm  # depth of device
 
     ## adjust Newton parameters
     control.tol_absolute      = 1.0e-10
@@ -411,12 +380,10 @@ grid           = simplexgrid(b)
 
         ## set non equilibrium boundary condition
         #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
-
-        set_contact!(ctsys, bregionCIGSRight, Δu = Δu)
+        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
 
         ## increase generation rate with bias
-        ctsys.data.λ2 = 10.0^(-biasSteps + i)
-        #println("bias: Δu = $(Δu)")
+        #ctsys.data.λ2 = 10.0^(-biasSteps + i)
      
         ## solve time step problems with timestep Δt
         solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
@@ -427,10 +394,7 @@ grid           = simplexgrid(b)
 
         ## store CHARGE DENSITY in CIGS
         #push!(chargeDensities,chargeDensity(ctsys,solution)[regionAcceptorLeft])
-        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionCIGSLeft]+charge_density(ctsys,solution)[regionCIGSRight]))
-
-        #set_contact!(ctsys, bregionAcceptorRight, Δu = jezuchryste)
-        #push!(chargeDensities2,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
         initialGuess .= solution
         i=i-1
@@ -439,25 +403,11 @@ grid           = simplexgrid(b)
     reverse!(IV)
     reverse!(chargeDensities)
 
-    #plot energies and qFermi levels for voltageMin
-    if plotting
-        ipsi = data.index_psi
-        X = grid[Coordinates][1,:]
-        Y = grid[Coordinates][2,:]
-
+    ## plot energies and qFermi levels for voltageMin
+    if plotting 
+        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
         Plotter.figure()
-        #TO DO: make the labels visible 
-        Plotter.surf(X[:], Y[:], Ev_CIGS/q .- solution[ipsi, :], label="Ev")
-        Plotter.surf(X[:], Y[:], Ec_CIGS/q .- solution[ipsi, :], label="Ec")
-        Plotter.surf(X[:], Y[:], -solution[iphin, :], label="\$ \\varphi_n \$")
-        Plotter.surf(X[:], Y[:], -solution[iphip, :], label="\$ \\varphi_p \$")
-        
-        Plotter.title("Band Edge Energies and qFermi levels at \$ $(voltageMin) \$V")
-        Plotter.xlabel("length [m]")
-        Plotter.ylabel("height [m]")
-        Plotter.zlabel("Energy [eV]")
-        Plotter.tight_layout() 
-               
+                
     end
     
     i = indexOfZero+1
@@ -468,7 +418,7 @@ grid           = simplexgrid(b)
 
         ## set non equilibrium boundary condition
         #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
-        set_contact!(ctsys, bregionCIGSRight, Δu = Δu)
+        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
     
         ## solve time step problems with timestep Δt
         solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
@@ -478,7 +428,7 @@ grid           = simplexgrid(b)
         push!(IV, w_device * z_device * current)
 
         ## store uncompensated CHARGE DENSITY in CIGS
-        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionCIGSLeft]+charge_density(ctsys,solution)[regionCIGSRight]))
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
 
         initialGuess .= solution
         i=i+1
@@ -495,41 +445,14 @@ grid           = simplexgrid(b)
     writedlm( "chargeDensities.csv"  ,  chargeDensities  , ',')
     writedlm( "biasValues.csv"       ,  biasValues       , ',')
 
-    ## plot solution at voltageMax, IV, QV and CV curves
-    if plotting
-
-        ipsi = data.index_psi
-        X = grid[Coordinates][1,:]
-        Y = grid[Coordinates][2,:]
-
-        #Plot energies
+    ## plot solution and IV curve
+    if plotting 
+        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_energy)
         Plotter.figure()
-        #TO DO: make the labels visible 
-        Plotter.surf(X[:], Y[:], Ev_CIGS/q .- solution[ipsi, :], label="Ev")
-        Plotter.surf(X[:], Y[:], Ec_CIGS/q .- solution[ipsi, :], label="Ec")
-        Plotter.surf(X[:], Y[:], -solution[iphin, :], label="\$ \\varphi_n \$")
-        Plotter.surf(X[:], Y[:], -solution[iphip, :], label="\$ \\varphi_p \$")
-        
-        Plotter.title("Band Edge Energies and qFermi levels at \$ $(voltageMax) \$V")
-        Plotter.xlabel("length [m]")
-        Plotter.ylabel("height [m]")
-        Plotter.zlabel("Energy [eV]")
-        Plotter.tight_layout()
-
-        #Plot densities
+        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
         Plotter.figure()
-        #TO DO: make the labels visible 
-        Plotter.surf(X[:], Y[:], log10.(1.0e-6 .*Nc.*exp.((-(Ec_CIGS/q .- solution[ipsi, :])-solution[iphin, :])/(params.UT)))) # electron density
-        Plotter.surf(X[:], Y[:], log10.(1.0e-6 .*Nv.*exp.(( (Ev_CIGS/q .- solution[ipsi, :])+solution[iphip, :])/(params.UT)))) #hole density
-        
-        Plotter.title("electrons and holes densities at \$ $(voltageMax) \$V")
-        Plotter.xlabel("length [m]")
-        Plotter.ylabel("height [m]")
-        Plotter.zlabel("Densities [log(cm-3)]")
-        Plotter.tight_layout()
-
-        #Plot IV, QV and CV
-        Plotter.figure()
+        # plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
+        # Plotter.figure()
         plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
         Plotter.figure()
         plot_IV(Plotter, biasValues,chargeDensities, biasValues[end], plotGridpoints = true)
@@ -542,7 +465,7 @@ grid           = simplexgrid(b)
                
     end
  
-    testval = sum(filter(!isnan, solution))/length(solution)
+    testval = solution[data.index_psi, 10]
     return testval
 
     println("*** done\n")

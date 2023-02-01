@@ -7,10 +7,8 @@ Simulating stationary charge transport in a pn junction with hole traps and a Sc
 
 module Example_CIGS_Schottky_with_traps_2D_unstr_grid
 
-using VoronoiFVM
 using ChargeTransport
 using ExtendableGrids
-using GridVisualize
 using PyPlot
 using DelimitedFiles
 using SimplexGridFactory
@@ -143,7 +141,7 @@ end
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
     # barrier_right     = Ev_CIGS + 0.4 * eV
-    barrier_left      = Ev_CIGS + 1.1 * eV
+    barrier_left      = 0.0 * eV
 
     ## recombination parameters
     ni_CIGS           = sqrt(Nc * Nv) * exp(-(Ec_CIGS - Ev_CIGS) / (2 * kB * T)) # intrinsic concentration
@@ -187,10 +185,12 @@ end
     Nt_vector = similar(data.params.densityOfStates[zt,:])
     Nt_vector[regionGrainBoundary] = Nt
     #enable_traps!(data = data, traps = iphip, regions = regions)
-    enable_traps!(data,z=zt,Nt=Nt_vector)   #traps
+    # enable_traps!(data,z=zt,Nt=Nt_vector)   #traps
+    NT = [0, Nt]
+    add_trap_density!(data=data, zt = zt, Nt = NT)
     
     ## Possible choices: GenerationNone, GenerationUniform, GenerationBeerLambert
-    data.generationModel                = GenerationBeerLambert
+    data.generationModel                = GenerationNone#GenerationBeerLambert
 
     ## Possible choices: OhmicContact, SchottkyContact (outer boundary) and InterfaceModelNone,
     ## InterfaceModelSurfaceReco (inner boundary).
@@ -202,7 +202,7 @@ end
     
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation              = ExcessChemicalPotential
+    data.fluxApproximation              .= ExcessChemicalPotential
    
 
 ############################################################################################################
@@ -230,7 +230,7 @@ end
  
      for ireg in 1:numberOfRegions           # interior region data
  
-         params.dielectricConstant[ireg]                 = εr_CIGS       
+         params.dielectricConstant[ireg]                 = εr_CIGS*ε0       
  
          ## effective DOS, band-edge energy and mobilities
          params.densityOfStates[iphin, ireg]             = Nc
@@ -534,7 +534,7 @@ end
                
     end
  
-    testval = solution[data.index_psi, 10]
+    testval = sum(filter(!isnan, solution))/length(solution)
     return testval
 
     println("*** done\n")

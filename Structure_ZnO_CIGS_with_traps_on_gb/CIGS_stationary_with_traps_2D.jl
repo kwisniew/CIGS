@@ -7,10 +7,8 @@ Simulating stationary charge transport in a pn junction with hole traps and a Sc
 
 module CIGS_stationary_with_traps_2D
 
-using VoronoiFVM
 using ChargeTransport
 using ExtendableGrids
-using GridVisualize
 using PyPlot
 using SimplexGridFactory
 using Triangulate
@@ -148,7 +146,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
-    barrier           = Ev_CIGS + 0.4 * eV
+    barrier           = 0.7 * eV
 
     ## recombination parameters
     ni_CIGS           = sqrt(Nc * Nv) * exp(-(Ec_CIGS - Ev_CIGS) / (2 * kB * T)) # intrinsic concentration
@@ -200,7 +198,8 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     zt = 1
     Nt_vector = similar(data.params.densityOfStates[zt,:])
     Nt_vector[regionGrainBoundary] = Nt
-    enable_traps!(data,z=zt,Nt=Nt_vector)
+    NT = [0, 0, Nt]
+    add_trap_density!(data=data, zt = zt, Nt = NT)
 
     ## Possible choices: GenerationNone, GenerationUniform, GenerationBeerLambert
     # PROBLEM: GenerationBeerLambert doesn't work!
@@ -214,7 +213,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation              = ExcessChemicalPotential
+    data.fluxApproximation              .= ExcessChemicalPotential
 
     if test == false
         println("*** done\n")
@@ -248,7 +247,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
 
     for ireg in [regionZnO, regionCIGS, regionGrainBoundary]          # interior region data
 
-        params.dielectricConstant[ireg]                 = εr_CIGS
+        params.dielectricConstant[ireg]                 = εr_CIGS*ε0
 
         ## effective DOS, band-edge energy and mobilities
         params.densityOfStates[iphin, ireg]             = Nc
@@ -284,7 +283,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     params.recombinationSRHTrapDensity[iphip, regionZnO] = p0_ZnO
     params.bandEdgeEnergy[iphin, regionZnO]              = Ec_ZnO
     params.bandEdgeEnergy[iphip, regionZnO]              = Ev_ZnO
-    params.dielectricConstant[regionZnO]                 = εr_ZnO
+    params.dielectricConstant[regionZnO]                 = εr_ZnO*ε0
     params.mobility[iphin, regionZnO]                    = mun_ZnO
     params.mobility[iphip, regionZnO]                    = mup_ZnO
 
@@ -513,7 +512,7 @@ function main(;n = 3, Plotter = PyPlot, plotting = false, verbose = false, test 
     end
 
 
-    testval = VoronoiFVM.norm(ctsys.fvmsys, solution, 2)
+    testval = sum(filter(!isnan, solution))/length(solution)
     return testval
 
     println("*** done\n")
