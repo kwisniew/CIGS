@@ -5,10 +5,8 @@ Simulating stationary charge transport in a pn junction with hole traps and a Sc
 
 module Example_CIGS_Schottky_1D
 
-using VoronoiFVM
 using ChargeTransport
 using ExtendableGrids
-using GridVisualize
 using PyPlot
 using DelimitedFiles
 
@@ -95,8 +93,8 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
-    barrier_right     = Ev_CIGS + 0.4 * eV
-    barrier_left      = Ev_CIGS + 1.0 * eV
+    barrier_right     = 0.7 * eV
+    barrier_left      = 0.1 * eV
 
     ## recombination parameters
     #=
@@ -156,7 +154,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation              = ExcessChemicalPotential
+    data.fluxApproximation              .= ExcessChemicalPotential
    
     println("*** done\n")
 
@@ -179,14 +177,14 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         # params.bBandEdgeEnergy[iphit, ibreg]            = Et
     end
 
-    params.bBandEdgeEnergy[iphin, bregionAcceptorRight]         = Ec_CIGS
-    params.bBandEdgeEnergy[iphip, bregionAcceptorRight]         = Ev_CIGS
+    params.bBandEdgeEnergy[iphin, bregionAcceptorRight]     = Ec_CIGS
+    params.bBandEdgeEnergy[iphip, bregionAcceptorRight]     = Ev_CIGS
     params.bBandEdgeEnergy[iphin, bregionAcceptorLeft]      = Ec_CIGS
     params.bBandEdgeEnergy[iphip, bregionAcceptorLeft]      = Ev_CIGS
 
     for ireg in 1:numberOfRegions           # interior region data
 
-        params.dielectricConstant[ireg]                 = εr_CIGS       
+        params.dielectricConstant[ireg]                 = εr_CIGS*ε0       
 
         ## effective DOS, band-edge energy and mobilities
         params.densityOfStates[iphin, ireg]             = Nc
@@ -327,9 +325,9 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         # label_density[iphit]   = "\$n_{\\tau}\$";        label_solution[iphit]  = "\$ \\varphi_{\\tau}\$"
         ## ##### set legend for plotting routines #####
         Plotter.figure()
-        plot_energies(Plotter, grid, data, solution, "Equilibrium", label_energy)
+        plot_energies( Plotter, ctsys, solution, "Equilibrium", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"Equilibrium", label_density)
+        plot_densities(Plotter, ctsys, solution,"Equilibrium", label_density)
 
         # plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
         # Plotter.figure()
@@ -405,7 +403,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     ## plot energies and qFermi levels for voltageMin
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
+        plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
         Plotter.figure()
                 
     end
@@ -447,9 +445,9 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     ## plot solution and IV curve
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_energy)
+        plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
+        plot_densities(Plotter, ctsys, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
         Plotter.figure()
         # plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
         # Plotter.figure()
@@ -465,7 +463,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
                
     end
  
-    testval = solution[data.index_psi, 10]
+    testval = sum(filter(!isnan, solution))/length(solution)
     return testval
 
     println("*** done\n")

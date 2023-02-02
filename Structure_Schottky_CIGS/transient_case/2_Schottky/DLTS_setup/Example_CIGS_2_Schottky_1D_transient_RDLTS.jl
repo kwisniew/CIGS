@@ -5,10 +5,8 @@ Simulating stationary charge transport in a pn junction with hole traps and a Sc
 
 module Example_CIGS_2_Schottky_1D_transient_RDLTS
 
-using VoronoiFVM
 using ChargeTransport
 using ExtendableGrids
-using GridVisualize
 using PyPlot
 using DelimitedFiles
 using FileIO, JLD2
@@ -24,7 +22,7 @@ function initialize_pin_grid(refinementfactor, h_pdoping, h_pdoping_right)
 end
 
 #In this script voltage is applied to the left side of the domain, what means that "+" means reverse voltage, and "-" means forward voltage
-function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
+function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse, makegif=false)
 
     ################################################################################
     println("Set up grid and regions")
@@ -88,8 +86,8 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
-    barrier_right     = Ev_CIGS + 0.4 * eV
-    barrier_left      = Ev_CIGS + 1.0 * eV
+    barrier_right     = 0.7 * eV
+    barrier_left      = 0.1 * eV
 
     ## recombination parameters
     Auger             = 1.0e-29  * cm^6 / s          # 1.0e-41 m^6 / s
@@ -138,7 +136,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation              = ExcessChemicalPotential
+    data.fluxApproximation              .= ExcessChemicalPotential
    
     println("*** done\n")
 
@@ -167,7 +165,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
     for ireg in 1:numberOfRegions           # interior region data
 
-        params.dielectricConstant[ireg]                 = εr_CIGS       
+        params.dielectricConstant[ireg]                 = εr_CIGS*ε0
 
         ## effective DOS, band-edge energy and mobilities
         params.densityOfStates[iphin, ireg]             = Nc
@@ -254,7 +252,8 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     #data.calculationType = inEquilibrium 
 
     ## solve thermodynamic equilibrium and update initial guess
-    solution              = FileIO.load("solution.jld2","solution")
+    solution              = FileIO.load("steady_state_solution.jld2","steady_state_solution")
+    # solution              = FileIO.load("solution_of_DLTS.jld2","solution_of_DLTS")
     equilibriumSolution  .= solution  
     initialGuess         .= solution
 
@@ -280,9 +279,9 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
         ## ##### set legend for plotting routines #####
         Plotter.figure()
-        plot_energies(Plotter, grid, data, solution, "Starting condition", label_energy)
+        plot_energies(Plotter, ctsys, solution, "Starting condition", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"Starting condition", label_density)
+        plot_densities(Plotter, ctsys, solution,"Starting condition", label_density)
     end
 
     ################################################################################
@@ -307,10 +306,11 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         # the Inf as tstep corresponds to stationary calculations.
         solve!(solution, initialGuess, ctsys, control  = control, tstep = 1e-12)
 
-
-        PyPlot.clf()
-        plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
-        PyPlot.pause(0.5)
+        if plotting
+            PyPlot.clf()
+            plot_solution(Plotter, ctsys, solution, "Equilibrium", label_solution)
+            PyPlot.pause(0.4)
+        end
 
         initialGuess .= solution
 
@@ -372,10 +372,18 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         push!(IV, w_device * z_device * current)
         push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptor]))
 
+        if makegif
+            if(mod(istep,5)==2)
+                plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_energy)
+                Plotter.title("\$time=$(t)s\$")
+                PyPlot.savefig("plots/energies$(istep).png")
+            end
+        end
+
         initialGuess .= solution
 
     end # bias loop
-
+    number_t_staps_phase_1 = number_tsteps
        println("*** done\n")
 
     ## compute static capacitance: check this is correctly computed
@@ -386,9 +394,9 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
     ## plot solution and IV curve
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_energy)
+        plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_density)
+        plot_densities(Plotter, ctsys, solution,"bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_density)
         Plotter.figure()
         plot_IV(Plotter, tvalues,IV, "\$ t_{end}=$(tvalues[end])s\$", plotGridpoints = true)
         Plotter.ylabel("I[A]")
@@ -433,7 +441,16 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         push!(IV, w_device * z_device * current)
         push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptor]))
 
+        if makegif
+            if(mod(istep,10)==2)
+                plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_energy)
+                Plotter.title("\$time=$(t)s\$")
+                PyPlot.savefig("plots/energies$(istep+number_t_staps_phase_1).png")
+            end
+        end
+        
         initialGuess .= solution
+        
 
     end # bias loop
 
@@ -443,9 +460,9 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
     ## plot solution and IV curve
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(Voltage_step), \$ t=$(tend_slow)\$", label_energy)
+        plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(Voltage_step), \$ t=$(tend_slow)\$", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(Voltage_step), \$ t=$(tend_slow)\$", label_density)
+        plot_densities(Plotter, ctsys, solution,"bias \$\\Delta u\$ = $(Voltage_step), \$ t=$(tend_slow)\$", label_density)
         Plotter.figure()
         plot_IV(Plotter, tvalues_all,IV, "\$ t_{end}=$(tvalues_all[end])s\$", plotGridpoints = true)
         Plotter.ylabel("total current[A]")

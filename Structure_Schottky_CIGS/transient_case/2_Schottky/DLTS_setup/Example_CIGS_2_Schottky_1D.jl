@@ -5,10 +5,8 @@ Simulating stationary charge transport in a pn junction with hole traps and a Sc
 
 module Example_CIGS_2_Schottky_1D
 
-using VoronoiFVM
 using ChargeTransport
 using ExtendableGrids
-using GridVisualize
 using PyPlot
 using DelimitedFiles
 using FileIO, JLD2
@@ -23,7 +21,7 @@ function initialize_pin_grid(refinementfactor, h_pdoping_left, h_pdoping_right)
     return coord
 end
 
-function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
+function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plotting = false, verbose = false, test = false, unknown_storage=:sparse)
 
     ################################################################################
     println("Set up grid and regions")
@@ -96,8 +94,8 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     vn                = An * T^2 / (q*Nc)
     vp                = Ap * T^2 / (q*Nv)
-    barrier_right     = Ev_CIGS + 0.4 * eV
-    barrier_left      = Ev_CIGS + 1.0 * eV
+    barrier_right     = 0.7 * eV
+    barrier_left      = 0.1 * eV
 
     ## recombination parameters
     #=
@@ -157,7 +155,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
     
     ## Choose flux discretization scheme: ScharfetterGummel, ScharfetterGummelGraded,
     ## ExcessChemicalPotential, ExcessChemicalPotentialGraded, DiffusionEnhanced, GeneralizedSG
-    data.fluxApproximation              = ExcessChemicalPotential
+    data.fluxApproximation              .= ExcessChemicalPotential
    
     println("*** done\n")
 
@@ -187,7 +185,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     for ireg in 1:numberOfRegions           # interior region data
 
-        params.dielectricConstant[ireg]                 = εr_CIGS       
+        params.dielectricConstant[ireg]                 = εr_CIGS*ε0     
 
         ## effective DOS, band-edge energy and mobilities
         params.densityOfStates[iphin, ireg]             = Nc
@@ -328,11 +326,11 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         # label_density[iphit]   = "\$n_{\\tau}\$";        label_solution[iphit]  = "\$ \\varphi_{\\tau}\$"
         ## ##### set legend for plotting routines #####
         Plotter.figure()
-        plot_energies(Plotter, grid, data, solution, "Equilibrium", label_energy)
+        plot_energies(Plotter, ctsys, solution, "Equilibrium", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"Equilibrium", label_density)
+        plot_densities(Plotter, ctsys, solution,"Equilibrium", label_density)
 
-        # plot_solution(Plotter, grid, data, solution, "Equilibrium", label_solution)
+        # plot_solution(Plotter, ctsys, solution, "Equilibrium", label_solution)
         # Plotter.figure()
     end
 
@@ -381,7 +379,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
         ## set non equilibrium boundary condition
         #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
-        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
+        set_contact!(ctsys, bregionAcceptorLeft, Δu = Δu)
 
         ## increase generation rate with bias
         #ctsys.data.λ2 = 10.0^(-biasSteps + i)
@@ -401,12 +399,13 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         i=i-1
     end # bias loop 1
 
+    # FileIO.save("steady_state_solution.jld2","steady_state_solution",solution)
     reverse!(IV)
     reverse!(chargeDensities)
 
     ## plot energies and qFermi levels for voltageMin
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
+        plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_energy)
         Plotter.figure()
                 
     end
@@ -419,7 +418,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
         ## set non equilibrium boundary condition
         #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
-        set_contact!(ctsys, bregionAcceptorRight, Δu = Δu)
+        set_contact!(ctsys, bregionAcceptorLeft, Δu = Δu)
     
         ## solve time step problems with timestep Δt
         solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
@@ -435,7 +434,7 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
         i=i+1
     end # bias loop 2
 
-    FileIO.save("solution.jld2","solution",solution)
+    FileIO.save("steady_state_solution.jld2","steady_state_solution",solution)
 
     println("*** done\n")
 
@@ -448,11 +447,11 @@ function main(;n = 3, voltageMin=-0.5, voltageMax=0.1, Plotter = PyPlot, plottin
 
     ## plot solution and IV curve
     if plotting 
-        plot_energies(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_energy)
+        plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_energy)
         Plotter.figure()
-        plot_densities(Plotter, grid, data, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
+        plot_densities(Plotter, ctsys, solution,"bias \$\\Delta u\$ = $(voltageMax), \$ t=$(0)\$", label_density)
         Plotter.figure()
-        # plot_solution(Plotter, grid, data, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
+        # plot_solution(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(endVoltage), \$ t=$(0)\$", label_solution)
         # Plotter.figure()
         plot_IV(Plotter, biasValues,IV, biasValues[end], plotGridpoints = true)
         Plotter.figure()
