@@ -113,7 +113,7 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
 
     # # biasVal=0.5
     biasValues = range(0.0, stop=voltageStep, length=11)
-    timeStep_for_bias = 1e-12 * s
+    timeStep_for_bias = 1e-11 * s
     tend_bias = (length(biasValues) - 1) * timeStep_for_bias
     tend = 1e-7 * s #1e-7
     ## Define scan protocol function
@@ -274,8 +274,8 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     control.tol_round = 1.0e-10
     control.max_round = 5
 
-    control.Δt = 1.0e-12
-    control.Δt_min = 1.0e-15
+    control.Δt = timeStep_for_bias
+    control.Δt_min = timeStep_for_bias/10
     control.Δt_max = tend / 10
     control.Δt_grow = 1.1
 
@@ -394,19 +394,19 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     ΔV = 0.001 * V
     Capacitance = zeros(length(tC))
 
-    println("Próba obliczeń dla stanu końcowego:")
-    ipsi = data.index_psi
-    println("1) Stan stacjonarny")
+    # println("Próba obliczeń dla stanu końcowego:")
+    # ipsi = data.index_psi
+    # println("1) Stan stacjonarny")
     set_contact!(ctsys, bregionAcceptorRight, Δu = 0.0)
     set_contact!(ctsys, bregionAcceptorLeft,  Δu = 0.0)
     solution = equilibrium_solve!(ctsys, control=control, nonlinear_steps=20)
-    equilibriumSolution .= solution
-    initialGuess .= solution
-    println(solution[ipsi, :])
-    Plotter.figure()
-    plot_solution(Plotter, ctsys, solution, "Stan stacjonarny", label_solution)
-    Plotter.figure()
-    println("Zrobione!")
+    # equilibriumSolution .= solution
+    # initialGuess .= solution
+    # println(solution[ipsi, :])
+    # Plotter.figure()
+    # plot_solution(Plotter, ctsys, solution, "Stan stacjonarny", label_solution)
+    # Plotter.figure()
+    # println("Zrobione!")
 
 
     data.calculationType = OutOfEquilibrium

@@ -392,19 +392,19 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     ΔV = 0.001 * V
     Capacitance = zeros(length(tC))
 
-    println("Próba obliczeń dla stanu końcowego:")
-    ipsi = data.index_psi
-    println("1) Stan stacjonarny")
+    # println("Próba obliczeń dla stanu końcowego:")
+    # ipsi = data.index_psi
+    # println("1) Stan stacjonarny")
     set_contact!(ctsys, bregionAcceptorRight, Δu = 0.5)
     set_contact!(ctsys, bregionAcceptorLeft,  Δu = 0.0)
     solution = equilibrium_solve!(ctsys, control=control, nonlinear_steps=20)
-    equilibriumSolution .= solution
-    initialGuess .= solution
-    println(solution[ipsi, :])
-    Plotter.figure()
-    plot_solution(Plotter, ctsys, solution, "Stan stacjonarny skryp RDLTS", label_solution)
-    Plotter.figure()
-    println("Zrobione!")
+    # equilibriumSolution .= solution
+    # initialGuess .= solution
+    # println(solution[ipsi, :])
+    # Plotter.figure()
+    # plot_solution(Plotter, ctsys, solution, "Stan stacjonarny skryp RDLTS", label_solution)
+    # Plotter.figure()
+    # println("Zrobione!")
 
 
     # contactVoltageFunction = [zeroVoltage, zeroVoltage]
