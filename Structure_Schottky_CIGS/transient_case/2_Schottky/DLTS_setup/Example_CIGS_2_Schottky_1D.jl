@@ -28,9 +28,9 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
     ################################################################################
 
     ## region numbers
-    regionAcceptorLeft  = 1                           # n doped region
-    regionAcceptorRight = 2                           # p doped region
-    regions             = [regionAcceptorLeft, regionAcceptorRight]
+    regionAcceptor  = 1                           # n doped region
+    # regionAcceptor = 2                           # p doped region
+    regions             = [regionAcceptor]#, regionAcceptor]
     numberOfRegions     = length(regions)
 
     ## boundary region numbers
@@ -53,9 +53,9 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
 
     ## set different regions in grid, doping profiles do not intersect
     ## n doped 
-    cellmask!(grid, [0.0 * μm], [h_pdoping_left], regionAcceptorLeft)          
+    cellmask!(grid, [0.0 * μm], [h_pdoping_left], regionAcceptor)          
     ## p doped                    
-    cellmask!(grid, [h_pdoping_left], [h_pdoping_left + h_pdoping_left], regionAcceptorRight)    
+    cellmask!(grid, [h_pdoping_left], [h_pdoping_left + h_pdoping_left], regionAcceptor)    
 
 
     if plotting
@@ -231,8 +231,8 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
     # params.densityOfStates[iphit, regionAcceptorRight]  = Nt_low
 
     ## doping -- since we do not set any doping for the traps it is automatically zero
-    params.doping[iphip, regionAcceptorLeft]             = Na        
-    params.doping[iphip, regionAcceptorRight]            = Na        
+    params.doping[iphip, regionAcceptor]             = Na        
+    # params.doping[iphip, regionAcceptor]            = Na        
 
     ## boundary doping
     params.bDoping[iphip, bregionAcceptorRight]          = Na        
@@ -369,7 +369,7 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
     control.max_iterations    = 30
     control.max_round         = 3
 
-    
+    AllSolution = Matrix{Float64}[]
     indexOfZero = indexin(0.0, biasValues)[1]
     i = indexOfZero
 
@@ -380,9 +380,6 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
         ## set non equilibrium boundary condition
         #set_schottky_contact!(ctsys, bregionAcceptorLeft, appliedVoltage = Δu)
         set_contact!(ctsys, bregionAcceptorLeft, Δu = Δu)
-
-        ## increase generation rate with bias
-        #ctsys.data.λ2 = 10.0^(-biasSteps + i)
      
         ## solve time step problems with timestep Δt
         solve!(solution, initialGuess, ctsys, control  = control, tstep = Inf)
@@ -393,7 +390,9 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
 
         ## store CHARGE DENSITY in CIGS
         #push!(chargeDensities,chargeDensity(ctsys,solution)[regionAcceptorLeft])
-        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptor]))#+charge_density(ctsys,solution)[regionAcceptor]))
+
+        push!(AllSolution, solution)
 
         initialGuess .= solution
         i=i-1
@@ -402,6 +401,7 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
     # FileIO.save("steady_state_solution.jld2","steady_state_solution",solution)
     reverse!(IV)
     reverse!(chargeDensities)
+    reverse!(AllSolution)
 
     ## plot energies and qFermi levels for voltageMin
     if plotting 
@@ -428,7 +428,8 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
         push!(IV, w_device * z_device * current)
 
         ## store uncompensated CHARGE DENSITY in CIGS
-        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptorLeft]+charge_density(ctsys,solution)[regionAcceptorRight]))
+        push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptor]))#+charge_density(ctsys,solution)[regionAcceptor]))
+        push!(AllSolution, solution)
 
         initialGuess .= solution
         i=i+1
@@ -459,17 +460,45 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
         Plotter.title("Charge density in donor region")
         Plotter.ylabel("Charge density [C]")
         Plotter.figure()
-        plot_IV(Plotter, biasValues,abs.(staticCapacitance), biasValues[end-1], plotGridpoints = true)
+        plot_IV(Plotter, biasValues,abs.(staticCapacitance)*1e9, biasValues[end-1], plotGridpoints = true)
         Plotter.title("Static capacitance in donor region")
-        Plotter.ylabel("Static capacitance [F]")
+        Plotter.ylabel("Static capacitance [nF]")
                
     end
  
+     println("*** done\n")
+
+    ################################################################################
+    println("Dynamic Capacitance")
+    ################################################################################
+    data.modelType = Transient
+    ctsys = System(grid, data, unknown_storage=unknown_storage)
+    NumCapPoints = length(biasValues)
+    τC = 1e-5
+    ΔV = 1e-6 * V
+    Capacitance = zeros(NumCapPoints)
+
+    for iCapMeas in eachindex(Capacitance)
+            initialGuess .= AllSolution[iCapMeas]
+            # charge_den_before = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
+            set_contact!(ctsys, bregionAcceptorLeft, Δu=biasValues[iCapMeas] + ΔV)
+            solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+            charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+            set_contact!(ctsys, bregionAcceptorLeft, Δu=biasValues[iCapMeas] - ΔV)
+            solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+            charge_den_after_minus = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
+            Capacitance[iCapMeas] = abs(   charge_den_after_plus - charge_den_after_minus   ) / (ΔV)
+
+    end
+    Plotter.figure()
+    Plotter.plot(biasValues, Capacitance*1e9)
+    plt.title("Dynamic Capacitance from IV curve")
+    plt.xlabel("u[V]")
+    plt.ylabel("C[nF]")
+
+
     testval = solution[data.index_psi, 10]
     return testval
-
-    println("*** done\n")
-
 end #  main
 
 function test()
