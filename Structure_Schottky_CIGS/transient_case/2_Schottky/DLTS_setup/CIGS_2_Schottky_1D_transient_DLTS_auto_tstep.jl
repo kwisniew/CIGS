@@ -115,7 +115,7 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     biasValues = range(0.0, stop=voltageStep, length=11)
     timeStep_for_bias = 1e-11 * s
     tend_bias = (length(biasValues) - 1) * timeStep_for_bias
-    tend = 1e-7 * s #1e-7
+    tend = 0.5e-6 * s #1e-7
     ## Define scan protocol function
     function scanProtocol(t)
 
@@ -323,15 +323,28 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
         plot_densities(Plotter, ctsys, solution, "Densities in Equilibrium", label_density)
         Plotter.figure()
     end
+
+    τC = 1e-8 *s
+    ΔV = 0.001 * V
+    data.calculationType = OutOfEquilibrium
+    set_contact!(ctsys, bregionAcceptorLeft, Δu=ΔV)
+    solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+    charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+    set_contact!(ctsys, bregionAcceptorLeft, Δu=-ΔV)
+    solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+    charge_den_after_minus = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
+    println("Pojemność w stanie rownowagi w 0.0V")
+    println( abs(   charge_den_after_plus - charge_den_after_minus   ) * 1e9 / (ΔV) )
+
     ################################################################################
     println("Automatic time stepping")
     ################################################################################
     data.calculationType = OutOfEquilibrium
     sol = solve(ctsys, inival=initialGuess, times=(0.0, tend), control=control)
-
+    println(sol.t[:])
+    # return
     if plotting
         tsol = sol(tend)
-        println(sol.t[:])
         plot_densities(Plotter, ctsys, tsol, "Densities at end time", label_density)
         Plotter.legend()
         Plotter.figure()
@@ -385,7 +398,7 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     ################################################################################
 
     NumCapPoints = 101
-    τC = 1e-9
+    τC = 1e-8*s
     tC_start = 10 * τC
     tC_end = tend
     tC = range(tC_start, stop=tC_end, length=NumCapPoints)
@@ -397,6 +410,7 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     # println("Próba obliczeń dla stanu końcowego:")
     # ipsi = data.index_psi
     # println("1) Stan stacjonarny")
+    #Why do we need those 3 lines?
     set_contact!(ctsys, bregionAcceptorRight, Δu = 0.0)
     set_contact!(ctsys, bregionAcceptorLeft,  Δu = 0.0)
     solution = equilibrium_solve!(ctsys, control=control, nonlinear_steps=20)
@@ -410,21 +424,32 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
 
 
     data.calculationType = OutOfEquilibrium
+    set_contact!(ctsys, bregionAcceptorLeft, Δu=ΔV)
+    solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+    charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+    set_contact!(ctsys, bregionAcceptorLeft, Δu=-ΔV)
+    solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+    charge_den_after_minus = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+    println("Pojemność w stanie rownowagi w 0")
+    println( abs(   charge_den_after_plus - charge_den_after_minus   ) * 1e9 / (2*ΔV) )
 
     for iCapMeas in eachindex(tC)
-        if tC[iCapMeas] > t_min && tC[iCapMeas] < t_max
+        if tC[iCapMeas] > t_min && tC[iCapMeas] <= t_max
             initialGuess .= sol(tC[iCapMeas])
-            charge_den_before = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
+            # charge_den_before = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
             set_contact!(ctsys, bregionAcceptorLeft, Δu=voltageStep + ΔV)
             solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
-            # solC = solve(ctsys, inival=initialGuess, times=(0.0, τC), control=control)
-            charge_den_after = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
-            Capacitance[iCapMeas] = abs(charge_den_after - charge_den_before) / ΔV
+            charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+            set_contact!(ctsys, bregionAcceptorLeft, Δu=voltageStep - ΔV)
+            solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+            charge_den_after_minus = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
+            Capacitance[iCapMeas] = abs(   charge_den_after_plus - charge_den_after_minus   ) / (2*ΔV)
+            # (dQplus-dQminus)/dV = ((charge_den_after_plus - charge_den_before) - (charge_den_after_minus - charge_den_before))/dV
         end
     end
     Plotter.figure()
     Plotter.plot(tC, Capacitance*1e9)
-    plt.title("Capacitance transient")
+    plt.title("Capacitance transient DLTS")
     plt.xlabel("t[s]")
     plt.ylabel("C[nF]")
 

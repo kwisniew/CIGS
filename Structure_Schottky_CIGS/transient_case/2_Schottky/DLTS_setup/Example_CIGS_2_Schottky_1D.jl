@@ -465,8 +465,11 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
         Plotter.ylabel("Static capacitance [nF]")
                
     end
- 
-     println("*** done\n")
+    plot_IV(Plotter, biasValues,abs.(staticCapacitance)*1e9, biasValues[end-1], plotGridpoints = true)
+    Plotter.title("Static capacitance in donor region")
+    Plotter.ylabel("Static capacitance [nF]")
+
+    println("*** done\n")
 
     ################################################################################
     println("Dynamic Capacitance")
@@ -474,8 +477,9 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
     data.modelType = Transient
     ctsys = System(grid, data, unknown_storage=unknown_storage)
     NumCapPoints = length(biasValues)
-    τC = 1e-5
-    ΔV = 1e-6 * V
+    #1/τC serves as "frequency" in e.g. Impedance calculations. In more complicated structures results can strongly depend on τC! 
+    τC = 1e-5 * s
+    ΔV = 1e-3 * V
     Capacitance = zeros(NumCapPoints)
 
     for iCapMeas in eachindex(Capacitance)
@@ -486,8 +490,8 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
             charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
             set_contact!(ctsys, bregionAcceptorLeft, Δu=biasValues[iCapMeas] - ΔV)
             solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
-            charge_den_after_minus = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
-            Capacitance[iCapMeas] = abs(   charge_den_after_plus - charge_den_after_minus   ) / (ΔV)
+            charge_den_after_minus  = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+            Capacitance[iCapMeas] = abs(   charge_den_after_plus - charge_den_after_minus   ) / (2*ΔV)
 
     end
     Plotter.figure()

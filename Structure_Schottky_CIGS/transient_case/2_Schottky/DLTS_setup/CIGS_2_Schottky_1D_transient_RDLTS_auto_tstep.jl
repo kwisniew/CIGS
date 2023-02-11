@@ -107,7 +107,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
     # # biasVal=0.5
     biasValues = range(voltageStep, stop=0.0, length=11)
-    timeStep_for_bias = 1e-11 * s
+    timeStep_for_bias = 1e-9 * s
     tend_bias = (length(biasValues) - 1) * timeStep_for_bias
     tend = 0.5e-6 * s #1e-7
     ## Define scan protocol function
@@ -326,9 +326,9 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     data.calculationType = OutOfEquilibrium
     sol = solve(ctsys, inival=initialGuess, times=(0.0, tend), control=control)
 
+    println(sol.t[:])
     if plotting
         tsol = sol(tend)
-        println(sol.t[:])
         plot_densities(Plotter, ctsys, tsol, "Densities at end time", label_density)
         Plotter.legend()
         Plotter.figure()
@@ -383,7 +383,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
 
 
     NumCapPoints = 101
-    τC = 1e-10 *s
+    τC = 1e-8 *s
     tC_start = 10 * τC
     tC_end = tend
     tC = range(tC_start, stop=tC_end, length=NumCapPoints)
@@ -395,6 +395,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     # println("Próba obliczeń dla stanu końcowego:")
     # ipsi = data.index_psi
     # println("1) Stan stacjonarny")
+    #Why do we need those 3 lines?
     set_contact!(ctsys, bregionAcceptorRight, Δu = 0.5)
     set_contact!(ctsys, bregionAcceptorLeft,  Δu = 0.0)
     solution = equilibrium_solve!(ctsys, control=control, nonlinear_steps=20)
@@ -406,19 +407,29 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     # Plotter.figure()
     # println("Zrobione!")
 
-
-    # contactVoltageFunction = [zeroVoltage, zeroVoltage]
-    # data.contactVoltageFunction = contactVoltageFunction 
+    solution              = FileIO.load("steady_state_solution.jld2","steady_state_solution")
+    initialGuess         .= solution
     data.calculationType = OutOfEquilibrium
+    set_contact!(ctsys, bregionAcceptorLeft, Δu=voltageStep+ΔV)
+    solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+    charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+    set_contact!(ctsys, bregionAcceptorLeft, Δu=voltageStep-ΔV)
+    solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+    charge_den_after_minus = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+    println("Pojemność w stanie rownowagi w 0.5V")
+    println( abs(   charge_den_after_plus - charge_den_after_minus   ) * 1e9 / (2*ΔV) )
 
     for iCapMeas in eachindex(tC)
-        if tC[iCapMeas] > t_min && tC[iCapMeas] < t_max
+        if tC[iCapMeas] > t_min && tC[iCapMeas] <= t_max
             initialGuess .= sol(tC[iCapMeas])
-            charge_den_before = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
-            set_contact!(ctsys, bregionAcceptorLeft, Δu=-0.001)#ΔV)
+            # charge_den_before = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
+            set_contact!(ctsys, bregionAcceptorLeft, Δu=ΔV)
             solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
-            charge_den_after = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
-            Capacitance[iCapMeas] = abs(charge_den_after - charge_den_before) / ΔV
+            charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+            set_contact!(ctsys, bregionAcceptorLeft, Δu=-ΔV)
+            solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
+            charge_den_after_minus = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
+            Capacitance[iCapMeas] = abs(charge_den_after_plus - charge_den_after_minus) / (2*ΔV)
         end
     end
     Plotter.figure()
