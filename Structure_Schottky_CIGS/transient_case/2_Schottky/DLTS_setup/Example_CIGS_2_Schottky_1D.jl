@@ -88,7 +88,7 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
     mut               = 0                    * (cm^2) / (V * s)  # no flux for traps
     εr_CIGS           = 13.6                 *  1.0              
     εr_ZnO            = 9                    *  1.0                
-    T                 = 300.0                *  K
+    T                 = 200.0                *  K
 
     An                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     Ap                = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
@@ -465,6 +465,8 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
         Plotter.ylabel("Static capacitance [nF]")
                
     end
+    Plotter.figure()
+    plt.yscale("log")
     plot_IV(Plotter, biasValues,abs.(staticCapacitance)*1e9, biasValues[end-1], plotGridpoints = true)
     Plotter.title("Static capacitance in donor region")
     Plotter.ylabel("Static capacitance [nF]")
@@ -478,7 +480,7 @@ function main(;n = 3, voltageMin=0.5, voltageMax=-0.1, Plotter = PyPlot, plottin
     ctsys = System(grid, data, unknown_storage=unknown_storage)
     NumCapPoints = length(biasValues)
     #1/τC serves as "frequency" in e.g. Impedance calculations. In more complicated structures results can strongly depend on τC! 
-    τC = 1e-5 * s
+    τC = 1e-6 * s
     ΔV = 1e-3 * V
     Capacitance = zeros(NumCapPoints)
 

@@ -85,7 +85,7 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     mun_CIGS = 100.0 * (cm^2) / (V * s)
     mup_CIGS = 25 * (cm^2) / (V * s)
     εr_CIGS = 13.6 * 1.0
-    T = 300.0 * K
+    T = 200.0 * K
 
     An = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
     Ap = 4 * pi * q * mₑ * kB^2 / Planck_constant^3
@@ -115,7 +115,7 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     biasValues = range(0.0, stop=voltageStep, length=11)
     timeStep_for_bias = 1e-11 * s
     tend_bias = (length(biasValues) - 1) * timeStep_for_bias
-    tend = 0.5e-6 * s #1e-7
+    tend = 1e-3 * s #1e-7
     ## Define scan protocol function
     function scanProtocol(t)
 
@@ -324,7 +324,7 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
         Plotter.figure()
     end
 
-    τC = 1e-8 *s
+    τC = 1e-6 *s
     ΔV = 0.001 * V
     data.calculationType = OutOfEquilibrium
     set_contact!(ctsys, bregionAcceptorLeft, Δu=ΔV)
@@ -332,9 +332,9 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
     set_contact!(ctsys, bregionAcceptorLeft, Δu=-ΔV)
     solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
-    charge_den_after_minus = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
+    charge_den_after_minus  = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
     println("Pojemność w stanie rownowagi w 0.0V")
-    println( abs(   charge_den_after_plus - charge_den_after_minus   ) * 1e9 / (ΔV) )
+    println( abs(   charge_den_after_plus - charge_den_after_minus   ) * 1e9 / (2*ΔV) )
 
     ################################################################################
     println("Automatic time stepping")
@@ -398,8 +398,8 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
     ################################################################################
 
     NumCapPoints = 101
-    τC = 1e-8*s
-    tC_start = 10 * τC
+    τC = 1e-6*s
+    tC_start = 5 * τC
     tC_end = tend
     tC = range(tC_start, stop=tC_end, length=NumCapPoints)
     t_min = minimum(sol.t[:])
@@ -442,12 +442,13 @@ function main(; n=3, voltageStep=0.5, Plotter=PyPlot, plotting=false, verbose=fa
             charge_den_after_plus   = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
             set_contact!(ctsys, bregionAcceptorLeft, Δu=voltageStep - ΔV)
             solve!(solution, initialGuess, ctsys, control=control, tstep=τC)
-            charge_den_after_minus = w_device * z_device * (charge_density(ctsys, initialGuess)[regionAcceptor])
+            charge_den_after_minus = w_device * z_device * (charge_density(ctsys, solution)[regionAcceptor])
             Capacitance[iCapMeas] = abs(   charge_den_after_plus - charge_den_after_minus   ) / (2*ΔV)
             # (dQplus-dQminus)/dV = ((charge_den_after_plus - charge_den_before) - (charge_den_after_minus - charge_den_before))/dV
         end
     end
     Plotter.figure()
+    plt.xscale("log")
     Plotter.plot(tC, Capacitance*1e9)
     plt.title("Capacitance transient DLTS")
     plt.xlabel("t[s]")

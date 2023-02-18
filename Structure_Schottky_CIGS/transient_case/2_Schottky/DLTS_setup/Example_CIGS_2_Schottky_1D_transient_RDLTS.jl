@@ -102,6 +102,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     Na                = 1.0e15 / (cm^3)   
 
     ## we will impose this applied voltage on one boundary
+    ## The positive sign corresponds to "reverse" direction
     voltageStep   = voltageStep * V
 
     println("*** done\n")

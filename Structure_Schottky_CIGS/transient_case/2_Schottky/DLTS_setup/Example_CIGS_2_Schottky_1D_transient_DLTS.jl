@@ -102,6 +102,7 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     Na                = 1.0e15 / (cm^3)   
 
     ## we will impose this applied voltage on one boundary
+    ## The positive sign corresponds to "reverse" direction
     voltageStep   = voltageStep * V
 
     println("*** done\n")
@@ -290,7 +291,6 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
     ## set calculationType to OutOfEquilibrium for starting with respective simulation.
     data.calculationType = OutOfEquilibrium
     biasValues           = range(0.0, stop = voltageStep, length = 11)
-
     ## increase slowly the bias in stationary calculations
 
     for Δu in biasValues
@@ -370,13 +370,13 @@ function main(;n = 3, voltageStep=0.5, Plotter = PyPlot, plotting = false, verbo
         push!(IV, w_device * z_device * current)
         push!(chargeDensities,w_device * z_device *(charge_density(ctsys,solution)[regionAcceptor]))
 
-        # if makegif
-        #     if(mod(istep,5)==2)
-        #         plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_energy)
-        #         Plotter.title("\$time=$(t)s\$")
-        #         PyPlot.savefig("plots/energies$(istep).png")
-        #     end
-        # end
+        if makegif
+            if(mod(istep,5)==2)
+                plot_energies(Plotter, ctsys, solution, "bias \$\\Delta u\$ = $(voltageStep), \$ t=$(tend)\$", label_energy)
+                Plotter.title("\$time=$(t)s\$")
+                PyPlot.savefig("plots/energies$(istep).png")
+            end
+        end
 
         initialGuess .= solution
 
